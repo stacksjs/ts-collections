@@ -77,15 +77,15 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     // Use native array methods with proper this binding for better performance
     map<U>(callback: (item: T, index: number) => U): CollectionOperations<U> {
-      return collect(map.call(collection.items, callback))
+      return collect(collection.items.map(callback))
     },
 
     filter(predicate: (item: T, index: number) => boolean): CollectionOperations<T> {
-      return collect(filter.call(collection.items, predicate))
+      return collect(collection.items.filter(predicate))
     },
 
     reduce<U>(callback: (accumulator: U, current: T, index: number) => U, initialValue: U): U {
-      return reduce.call(collection.items, callback, initialValue)
+      return collection.items.reduce(callback, initialValue)
     },
 
     // Optimized element access
