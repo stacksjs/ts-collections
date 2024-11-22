@@ -1286,7 +1286,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       if (collection.length > 0) {
         const firstItem = collection.items[0]
         // Now Object.keys will work correctly with T extends object
-        const fields = Object.keys(firstItem) as Array<keyof T>
+        const fields = Object.keys(firstItem as object) as Array<keyof T>
 
         metrics.fieldCount = fields.length
 
@@ -1321,22 +1321,24 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       }
     },
 
-    transform<U>(schema: Record<keyof U, (item: T) => any>): CollectionOperations<U> {
+    transform<U>(schema: Record<keyof U, (item: T) => U[keyof U]>): CollectionOperations<U> {
       return collect(
         collection.items.map((item) => {
-          const result: Record<string, any> = {}
-          for (const [key, transform] of Object.entries(schema)) {
+          const result = {} as U
+          // Use type assertion to maintain type safety while iterating
+          const entries = Object.entries(schema) as Array<[keyof U, (item: T) => U[keyof U]]>
+          for (const [key, transform] of entries) {
             result[key] = transform(item)
           }
-          return result as U
+          return result
         }),
       )
     },
 
-    kmeans({ k, maxIterations = 100, distanceMetric = 'euclidean' }: KMeansOptions) {
+    kmeans({ k, maxIterations = 100, distanceMetric = 'euclidean' }: KMeansOptions): CollectionOperations<{ cluster: number, data: T }> {
       // Simple k-means implementation for numeric data
       const data = collection.items.map(item =>
-        Object.values(item).filter(v => typeof v === 'number'),
+        Object.values(item as object).filter(v => typeof v === 'number'),
       ) as number[][]
 
       // Initialize centroids randomly
@@ -1373,6 +1375,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         previousCentroids = centroids
 
         // Calculate new centroids
+        // eslint-disable-next-line unicorn/no-new-array
         centroids = new Array(k)
           .fill(0)
           .map((_, i) => {
@@ -1401,33 +1404,41 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       // Return original items with cluster assignments
       return collect(
-        collection.items.map((item, i) => ({
-          cluster: centroids.indexOf(
-            centroids.reduce((nearest, centroid) => {
-              const point = Object.values(item).filter(
-                v => typeof v === 'number',
-              ) as number[]
-              const distance
-                = distanceMetric === 'euclidean'
-                  ? Math.sqrt(
-                    point.reduce(
-                      (sum, dim, i) =>
-                        sum + (dim - centroid[i]) ** 2,
-                      0,
-                    ),
-                  )
-                  : distanceMetric === 'manhattan'
-                    ? point.reduce(
-                      (sum, dim, i) =>
-                        sum + Math.abs(dim - centroid[i]),
-                      0,
-                    )
-                    : 0
-              return distance < nearest ? centroid : nearest
-            }, centroids[0]),
-          ),
-          data: item,
-        })),
+        collection.items.map((item) => {
+          const point = Object.values(item as object).filter(
+            v => typeof v === 'number',
+          ) as number[]
+
+          // Find the nearest centroid by comparing distances
+          let minDistance = Infinity
+          let nearestCluster = 0
+
+          centroids.forEach((centroid, index) => {
+            const distance = distanceMetric === 'euclidean'
+              ? Math.sqrt(
+                point.reduce(
+                  (sum, dim, i) => sum + (dim - centroid[i]) ** 2,
+                  0,
+                ),
+              )
+              : distanceMetric === 'manhattan'
+                ? point.reduce(
+                  (sum, dim, i) => sum + Math.abs(dim - centroid[i]),
+                  0,
+                )
+                : 0
+
+            if (distance < minDistance) {
+              minDistance = distance
+              nearestCluster = index
+            }
+          })
+
+          return {
+            cluster: nearestCluster,
+            data: item,
+          }
+        }),
       )
     },
 
@@ -1481,6 +1492,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     explain(): string {
       const pipeline: string[] = []
+      // eslint-disable-next-line ts/no-this-alias
       let currentOp = this
 
       while ((currentOp as any).__previous) {
