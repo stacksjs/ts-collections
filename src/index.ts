@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 /**
  * Type for any function that takes a value and returns a string/number key
  */
@@ -56,6 +58,11 @@ interface TimeSeriesOptions {
   fillGaps?: boolean
 }
 
+interface TimeSeriesPoint {
+  date: Date
+  value: number
+}
+
 interface MovingAverageOptions {
   window: number
   centered?: boolean
@@ -65,6 +72,7 @@ interface MovingAverageOptions {
  * Types for validation
  */
 type ValidationRule<T> = (value: T) => boolean | Promise<boolean>
+
 type ValidationSchema<T> = {
   [K in keyof T]?: ValidationRule<T[K]>[]
 }
@@ -131,6 +139,52 @@ interface VersionInfo<T> {
 }
 
 /**
+ * Interface for collection metrics
+ */
+interface CollectionMetrics {
+  count: number
+  nullCount: number
+  uniqueCount: number
+  heapUsed: number
+  heapTotal: number
+  fieldCount?: number
+  nullFieldsDistribution?: Map<string, number>
+}
+
+/**
+ * Type for a lazy evaluation generator
+ */
+type LazyGenerator<T> = Generator<T, void, unknown> | AsyncGenerator<T, void, unknown>
+
+/**
+ * Interface for lazy collection operations
+ */
+interface LazyCollectionOperations<T> {
+  // Core Operations - these build up the computation chain without executing
+  map: <U>(callback: (item: T, index: number) => U) => LazyCollectionOperations<U>
+  filter: (predicate: (item: T, index: number) => boolean) => LazyCollectionOperations<T>
+  flatMap: <U>(callback: (item: T, index: number) => U[]) => LazyCollectionOperations<U>
+  take: (count: number) => LazyCollectionOperations<T>
+  skip: (count: number) => LazyCollectionOperations<T>
+  chunk: (size: number) => LazyCollectionOperations<T[]>
+
+  // Terminal Operations - these execute the chain
+  toArray: () => Promise<T[]>
+  toCollection: () => Promise<CollectionOperations<T>>
+  forEach: (callback: (item: T) => void) => Promise<void>
+  reduce: <U>(callback: (accumulator: U, current: T) => U, initial: U) => Promise<U>
+  count: () => Promise<number>
+  first: () => Promise<T | undefined>
+  last: () => Promise<T | undefined>
+  nth: (n: number) => Promise<T | undefined>
+
+  // Utility Operations
+  cache: () => LazyCollectionOperations<T>
+  batch: (size: number) => LazyCollectionOperations<T>
+  pipe: <U>(callback: (lazy: LazyCollectionOperations<T>) => LazyCollectionOperations<U>) => LazyCollectionOperations<U>
+}
+
+/**
  * All available collection operations
  */
 interface CollectionOperations<T> extends Collection<T> {
@@ -146,11 +200,11 @@ interface CollectionOperations<T> extends Collection<T> {
   mapUntil: <U>(callback: (item: T, index: number) => U, predicate: (item: U) => boolean) => CollectionOperations<U>
 
   // Async Operations
-  mapAsync: <U>(callback: AsyncCallback<T, U>) => Promise<CollectionOperations<U>>
+  mapAsync: <U>(callback: AsyncCallback<T, U>) => Promise<CollectionOperations<Awaited<U>>>
   filterAsync: (callback: AsyncCallback<T, boolean>) => Promise<CollectionOperations<T>>
+  reduceAsync: <U>(callback: (acc: U, item: T) => Promise<U>, initialValue: U) => Promise<U>
   everyAsync: (callback: AsyncCallback<T, boolean>) => Promise<boolean>
   someAsync: (callback: AsyncCallback<T, boolean>) => Promise<boolean>
-  reduceAsync: <U>(callback: (acc: U, item: T) => Promise<U>, initialValue: U) => Promise<U>
 
   // Accessing Elements
   first: <K extends keyof T>(key?: K) => T | T[K] | undefined
@@ -228,7 +282,6 @@ interface CollectionOperations<T> extends Collection<T> {
   power: () => CollectionOperations<CollectionOperations<T>>
 
   // Set Operations
-  diff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
   intersect: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
   union: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
 
@@ -237,9 +290,8 @@ interface CollectionOperations<T> extends Collection<T> {
   correlate: <K extends keyof T>(key1: K, key2: K) => number
   outliers: <K extends keyof T>(key: K, threshold?: number) => CollectionOperations<T>
 
-  // Type Conversion and Validation
+  // Type Conversion
   cast: <U>(constructor: new (...args: any[]) => U) => CollectionOperations<U>
-  validate: (schema: Record<keyof T, (value: any) => boolean>) => boolean
 
   // Utilities
   tap: (callback: (collection: CollectionOperations<T>) => void) => CollectionOperations<T>
@@ -257,16 +309,16 @@ interface CollectionOperations<T> extends Collection<T> {
   dd: () => never
 
   // Time Series Operations
-  timeSeries: (options: TimeSeriesOptions) => CollectionOperations<{ date: Date; value: number }>
+  timeSeries: (options: TimeSeriesOptions) => CollectionOperations<TimeSeriesPoint>
   movingAverage: (options: MovingAverageOptions) => CollectionOperations<number>
-  trend: (options: TimeSeriesOptions) => { slope: number; intercept: number }
+  trend: (options: TimeSeriesOptions) => { slope: number, intercept: number }
   seasonality: (options: TimeSeriesOptions) => Map<string, number>
   forecast: (periods: number) => CollectionOperations<T>
 
   // Advanced Validation
   validate: (schema: ValidationSchema<T>) => Promise<ValidationResult>
-  assertValid: (schema: ValidationSchema<T>) => Promise<void>
   validateSync: (schema: ValidationSchema<T>) => ValidationResult
+  assertValid: (schema: ValidationSchema<T>) => Promise<void>
   sanitize: (rules: Record<keyof T, (value: any) => any>) => CollectionOperations<T>
 
   // Advanced Querying
@@ -305,7 +357,7 @@ interface CollectionOperations<T> extends Collection<T> {
 
   // Pattern Matching & Text Analysis
   fuzzyMatch: <K extends keyof T>(key: K, pattern: string, threshold?: number) => CollectionOperations<T>
-  sentiment: (this: CollectionOperations<string>) => CollectionOperations<{ score: number; comparative: number }>
+  sentiment: (this: CollectionOperations<string>) => CollectionOperations<{ score: number, comparative: number }>
   wordFrequency: (this: CollectionOperations<string>) => Map<string, number>
   ngrams: (this: CollectionOperations<string>, n: number) => CollectionOperations<string>
 
@@ -316,8 +368,8 @@ interface CollectionOperations<T> extends Collection<T> {
   unfold: <U>(fn: (seed: U) => [T, U] | null, initial: U) => CollectionOperations<T>
 
   // Monitoring & Metrics
-  metrics: () => Map<string, number>
-  profile: () => Promise<{ time: number; memory: number }>
+  metrics: () => CollectionMetrics
+  profile: () => Promise<{ time: number, memory: number }>
   instrument: (callback: (stats: Map<string, number>) => void) => CollectionOperations<T>
 
   // Type Conversions & Casting
@@ -327,7 +379,7 @@ interface CollectionOperations<T> extends Collection<T> {
   transform: <U>(schema: Record<keyof U, (item: T) => any>) => CollectionOperations<U>
 
   // Machine Learning Operations
-  kmeans: (options: KMeansOptions) => CollectionOperations<{ cluster: number; data: T }>
+  kmeans: (options: KMeansOptions) => CollectionOperations<{ cluster: number, data: T }>
   linearRegression: <K extends keyof T>(
     dependent: K,
     independents: K[]
@@ -354,12 +406,13 @@ interface CollectionOperations<T> extends Collection<T> {
   revert: (version: number) => CollectionOperations<T>
   history: () => CollectionOperations<VersionInfo<T>>
   diff: (version1: number, version2: number) => CollectionOperations<VersionInfo<T>>
+  setDiff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
 
   // Advanced Querying & Search
   search: <K extends keyof T>(
     query: string,
     fields: K[],
-    options?: { fuzzy?: boolean; weights?: Record<K, number> }
+    options?: { fuzzy?: boolean, weights?: Record<K, number> }
   ) => CollectionOperations<T & { score: number }>
   aggregate: <K extends keyof T>(
     key: K,
@@ -375,7 +428,7 @@ interface CollectionOperations<T> extends Collection<T> {
   // Performance Optimizations
   parallel: <U>(
     callback: (chunk: CollectionOperations<T>) => Promise<U>,
-    options?: { chunks?: number; maxConcurrency?: number }
+    options?: { chunks?: number, maxConcurrency?: number }
   ) => Promise<CollectionOperations<U>>
   index: <K extends keyof T>(keys: K[]) => CollectionOperations<T>
   optimize: () => CollectionOperations<T>
@@ -495,7 +548,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     sum(key?: keyof T): number {
-      if (collection.length === 0) return 0
+      if (collection.length === 0)
+        return 0
 
       return collection.items.reduce((sum, item) => {
         const value = key ? Number(item[key]) : Number(item)
@@ -508,7 +562,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     median(key?: keyof T): number | undefined {
-      if (collection.length === 0) return undefined
+      if (collection.length === 0)
+        return undefined
 
       const values = key
         ? collection.items.map(item => Number(item[key])).sort((a, b) => a - b)
@@ -521,7 +576,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     mode(key?: keyof T): T | undefined {
-      if (collection.length === 0) return undefined
+      if (collection.length === 0)
+        return undefined
 
       const frequency = new Map<any, number>()
       let maxFreq = 0
@@ -542,7 +598,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     min(key?: keyof T): T | undefined {
-      if (collection.length === 0) return undefined
+      if (collection.length === 0)
+        return undefined
 
       return collection.items.reduce((min, item) => {
         const value = key ? item[key] : item
@@ -551,7 +608,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     max(key?: keyof T): T | undefined {
-      if (collection.length === 0) return undefined
+      if (collection.length === 0)
+        return undefined
 
       return collection.items.reduce((max, item) => {
         const value = key ? item[key] : item
@@ -560,7 +618,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     chunk(size: number): CollectionOperations<T[]> {
-      if (size < 1) throw new Error('Chunk size must be greater than 0')
+      if (size < 1)
+        throw new Error('Chunk size must be greater than 0')
 
       const chunks: T[][] = []
       for (let i = 0; i < collection.length; i += size) {
@@ -577,7 +636,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           ? keyOrCallback(item)
           : item[keyOrCallback]
 
-        if (!groups.has(key)) groups.set(key, [])
+        if (!groups.has(key))
+          groups.set(key, [])
         groups.get(key)!.push(item)
       }
 
@@ -595,7 +655,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       for (const item of collection.items) {
         if (predicate(item)) {
           pass.push(item)
-        } else {
+        }
+        else {
           fail.push(item)
         }
       }
@@ -618,27 +679,29 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     whereBetween<K extends keyof T>(key: K, min: T[K], max: T[K]): CollectionOperations<T> {
-      return collect(collection.items.filter(item => {
+      return collect(collection.items.filter((item) => {
         const value = item[key]
         return value >= min && value <= max
       }))
     },
 
     whereNotBetween<K extends keyof T>(key: K, min: T[K], max: T[K]): CollectionOperations<T> {
-      return collect(collection.items.filter(item => {
+      return collect(collection.items.filter((item) => {
         const value = item[key]
         return value < min || value > max
       }))
     },
 
     unique<K extends keyof T>(key?: K): CollectionOperations<T> {
-      if (!key) return collect([...new Set(collection.items)])
+      if (!key)
+        return collect([...new Set(collection.items)])
 
       const seen = new Set<T[K]>()
       return collect(
         collection.items.filter((item) => {
           const value = item[key]
-          if (seen.has(value)) return false
+          if (seen.has(value))
+            return false
           seen.add(value)
           return true
         }),
@@ -647,7 +710,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     when(
       condition: boolean | ConditionalCallback<T>,
-      callback: (collection: CollectionOperations<T>) => CollectionOperations<T>
+      callback: (collection: CollectionOperations<T>) => CollectionOperations<T>,
     ): CollectionOperations<T> {
       const shouldRun = typeof condition === 'function' ? condition(this) : condition
       return shouldRun ? callback(this) : this
@@ -655,7 +718,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     unless(
       condition: boolean | ConditionalCallback<T>,
-      callback: (collection: CollectionOperations<T>) => CollectionOperations<T>
+      callback: (collection: CollectionOperations<T>) => CollectionOperations<T>,
     ): CollectionOperations<T> {
       const shouldRun = typeof condition === 'function' ? condition(this) : condition
       return shouldRun ? this : callback(this)
@@ -688,9 +751,18 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(Array.from(new Set(collection.items.map(item => item[key]))))
     },
 
-    diff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
+    setDiff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
       const otherSet = new Set(Array.isArray(other) ? other : other.items)
       return collect(collection.items.filter(item => !otherSet.has(item)))
+    },
+
+    diff(version1: number, version2: number): CollectionOperations<VersionInfo<T>> {
+      const history = this.history().toArray()
+      const changes = history.filter(v =>
+        v.version >= Math.min(version1, version2)
+        && v.version <= Math.max(version1, version2),
+      )
+      return collect(changes)
     },
 
     intersect(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
@@ -739,7 +811,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     product(key?: keyof T): number {
-      if (collection.length === 0) return 0
+      if (collection.length === 0)
+        return 0
 
       return collection.items.reduce((product, item) => {
         const value = key ? Number(item[key]) : Number(item)
@@ -753,7 +826,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       }
 
       const mean = this.avg(key)
-      const squaredDiffs = collection.items.map(item => {
+      const squaredDiffs = collection.items.map((item) => {
         const value = key ? Number(item[key]) : Number(item)
         const diff = value - mean
         return diff * diff
@@ -764,12 +837,13 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       return {
         population: Math.sqrt(populationVariance),
-        sample: Math.sqrt(sampleVariance)
+        sample: Math.sqrt(sampleVariance),
       }
     },
 
     percentile(p: number, key?: keyof T): number | undefined {
-      if (p < 0 || p > 100 || collection.length === 0) return undefined
+      if (p < 0 || p > 100 || collection.length === 0)
+        return undefined
 
       const values = key
         ? collection.items.map(item => Number(item[key])).sort((a, b) => a - b)
@@ -813,9 +887,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(collection.items.filter(item => item instanceof constructor))
     },
 
-    async mapAsync<U>(callback: AsyncCallback<T, U>): Promise<CollectionOperations<U>> {
+    async mapAsync<U>(callback: AsyncCallback<T, U>): Promise<CollectionOperations<Awaited<U>>> {
       const results = await Promise.all(
-        collection.items.map((item, index) => callback(item, index))
+        collection.items.map((item, index) => callback(item, index)),
       )
       return collect(results)
     },
@@ -824,17 +898,41 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       const results = await Promise.all(
         collection.items.map(async (item, index) => ({
           item,
-          keep: await callback(item, index)
-        }))
+          keep: await callback(item, index),
+        })),
       )
       return collect(results.filter(({ keep }) => keep).map(({ item }) => item))
+    },
+
+    async reduceAsync<U>(
+      callback: (acc: U, item: T) => Promise<U>,
+      initialValue: U,
+    ): Promise<U> {
+      let result = initialValue
+      for (const item of collection.items) {
+        result = await callback(result, item)
+      }
+      return result
+    },
+
+    async everyAsync(callback: AsyncCallback<T, boolean>): Promise<boolean> {
+      const results = await Promise.all(
+        collection.items.map((item, index) => callback(item, index)),
+      )
+      return results.every(result => result)
+    },
+
+    async someAsync(callback: AsyncCallback<T, boolean>): Promise<boolean> {
+      const results = await Promise.all(
+        collection.items.map((item, index) => callback(item, index)),
+      )
+      return results.some(result => result)
     },
 
     paginate(perPage: number, page: number = 1): PaginationResult<T> {
       const total = collection.length
       const lastPage = Math.ceil(total / perPage)
       const currentPage = Math.min(Math.max(page, 1), lastPage)
-      const offset = (currentPage - 1) * perPage
 
       return {
         data: this.forPage(currentPage, perPage),
@@ -842,13 +940,13 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         perPage,
         currentPage,
         lastPage,
-        hasMorePages: currentPage < lastPage
+        hasMorePages: currentPage < lastPage,
       }
     },
 
     forPage(page: number, perPage: number): CollectionOperations<T> {
-      const start = (page - 1) * perPage
-      return collect(collection.items.slice(start, start + perPage))
+      const offset = (page - 1) * perPage
+      return collect(collection.items.slice(offset, offset + perPage))
     },
 
     async *cursor(size: number): AsyncGenerator<CollectionOperations<T>, void, unknown> {
@@ -907,8 +1005,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       return new Map(
         Array.from(groups.entries()).map(
-          ([key, items]) => [key, collect(items)]
-        )
+          ([key, items]) => [key, collect(items)],
+        ),
       )
     },
 
@@ -936,6 +1034,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     debug(): CollectionOperations<T> {
+      // eslint-disable-next-line no-console
       console.log({
         items: collection.items,
         length: collection.length,
@@ -945,6 +1044,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     dump(): void {
+      // eslint-disable-next-line no-console
       console.log(collection.items)
     },
 
@@ -953,43 +1053,51 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       process.exit(1)
     },
 
-    timeSeries({ dateField, valueField, interval = 'day', fillGaps = true }: TimeSeriesOptions) {
-      const dates = collection.items.map(item => new Date(item[dateField as keyof T]))
-      const values = collection.items.map(item => Number(item[valueField as keyof T]))
-      const sorted = collect(dates.map((date, i) => ({ date, value: values[i] })))
-        .sortBy('date')
-        .toArray()
+    timeSeries({ dateField, valueField, interval = 'day', fillGaps = true }: TimeSeriesOptions): CollectionOperations<TimeSeriesPoint> {
+      // Safely convert values to dates and numbers with proper type checking
+      const points: TimeSeriesPoint[] = collection.items.map((item) => {
+        const dateValue = item[dateField as keyof T]
+        const numValue = item[valueField as keyof T]
 
-      if (!fillGaps) return collect(sorted)
+        const date = dateValue instanceof Date
+          ? dateValue
+          : new Date(String(dateValue))
 
-      const result: { date: Date; value: number }[] = []
-      let currentDate = new Date(Math.min(...dates))
-      const endDate = new Date(Math.max(...dates))
+        const value = typeof numValue === 'number'
+          ? numValue
+          : Number(numValue)
 
-      while (currentDate <= endDate) {
+        return { date, value }
+      })
+
+      // Sort points by date
+      const sorted = points.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+      if (!fillGaps || sorted.length === 0) {
+        return collect(sorted)
+      }
+
+      // Find min and max dates using timestamps
+      const startTimestamp = Math.min(...sorted.map(point => point.date.getTime()))
+      const endTimestamp = Math.max(...sorted.map(point => point.date.getTime()))
+      let currentTimestamp = startTimestamp
+
+      const result: TimeSeriesPoint[] = []
+      const endTime = endTimestamp + 1 // Add 1ms to include the end date
+
+      while (currentTimestamp < endTime) {
+        const currentDate = new Date(currentTimestamp)
         const found = sorted.find(item =>
-          item.date.toISOString().split('T')[0] === currentDate.toISOString().split('T')[0]
+          isSameDay(item.date, currentDate),
         )
 
         result.push({
           date: new Date(currentDate),
-          value: found ? found.value : 0
+          value: found ? found.value : 0,
         })
 
-        switch (interval) {
-          case 'day':
-            currentDate.setDate(currentDate.getDate() + 1)
-            break
-          case 'week':
-            currentDate.setDate(currentDate.getDate() + 7)
-            break
-          case 'month':
-            currentDate.setMonth(currentDate.getMonth() + 1)
-            break
-          case 'year':
-            currentDate.setFullYear(currentDate.getFullYear() + 1)
-            break
-        }
+        // Calculate next timestamp based on interval
+        currentTimestamp = getNextTimestamp(currentDate, interval)
       }
 
       return collect(result)
@@ -1015,42 +1123,91 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     async validate(schema: ValidationSchema<T>): Promise<ValidationResult> {
       const errors = new Map<string, string[]>()
 
-      for (const [key, rules] of Object.entries(schema)) {
-        if (!rules) continue
+      // Type-safe entries iteration
+      const entries = Object.entries(schema) as Array<[keyof T, ValidationRule<any>[]]>
+
+      for (const [key, rules] of entries) {
+        if (!rules || !Array.isArray(rules))
+          continue
 
         for (const item of collection.items) {
-          const value = item[key as keyof T]
+          const value = item[key]
           const itemErrors: string[] = []
 
           for (const rule of rules) {
-            const result = await rule(value)
-            if (!result) {
-              itemErrors.push(`Validation failed for ${key}`)
+            try {
+              const result = await rule(value)
+              if (!result) {
+                itemErrors.push(`Validation failed for ${String(key)}`)
+              }
+            }
+            catch (error) {
+              itemErrors.push(`Validation error for ${String(key)}: ${error instanceof Error ? error.message : 'Unknown error'}`)
             }
           }
 
           if (itemErrors.length > 0) {
-            errors.set(key, itemErrors)
+            errors.set(String(key), itemErrors)
           }
         }
       }
 
       return {
         isValid: errors.size === 0,
-        errors
+        errors,
+      }
+    },
+
+    validateSync(schema: ValidationSchema<T>): ValidationResult {
+      const errors = new Map<string, string[]>()
+      const entries = Object.entries(schema) as Array<[keyof T, ValidationRule<any>[]]>
+
+      for (const [key, rules] of entries) {
+        if (!rules || !Array.isArray(rules))
+          continue
+
+        for (const item of collection.items) {
+          const value = item[key]
+          const itemErrors: string[] = []
+
+          for (const rule of rules) {
+            try {
+              const result = rule(value)
+              if (result instanceof Promise) {
+                throw new TypeError('Async validation rules are not supported in validateSync')
+              }
+              if (!result) {
+                itemErrors.push(`Validation failed for ${String(key)}`)
+              }
+            }
+            catch (error) {
+              itemErrors.push(`Validation error for ${String(key)}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            }
+          }
+
+          if (itemErrors.length > 0) {
+            errors.set(String(key), itemErrors)
+          }
+        }
+      }
+
+      return {
+        isValid: errors.size === 0,
+        errors,
       }
     },
 
     stream(): ReadableStream<T> {
       let index = 0
       return new ReadableStream({
-        pull: controller => {
+        pull: (controller) => {
           if (index < collection.length) {
             controller.enqueue(collection.items[index++])
-          } else {
+          }
+          else {
             controller.close()
           }
-        }
+        },
       })
     },
 
@@ -1061,10 +1218,12 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       try {
         while (true) {
           const { done, value } = await reader.read()
-          if (done) break
+          if (done)
+            break
           items.push(value)
         }
-      } finally {
+      }
+      finally {
         reader.releaseLock()
       }
 
@@ -1089,7 +1248,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
             matrix[i][j] = Math.min(
               matrix[i - 1][j] + 1,
               matrix[i][j - 1] + 1,
-              matrix[i - 1][j - 1] + cost
+              matrix[i - 1][j - 1] + cost,
             )
           }
         }
@@ -1104,26 +1263,49 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       return collect(
         collection.items.filter(item =>
-          similarity(String(item[key]), pattern) >= threshold
-        )
+          similarity(String(item[key]), pattern) >= threshold,
+        ),
       )
     },
 
-    metrics(): Map<string, number> {
-      const metrics = new Map<string, number>()
+    metrics(): CollectionMetrics {
+      const metrics: CollectionMetrics = {
+        count: this.count(),
+        nullCount: 0,
+        uniqueCount: this.unique().count(),
+        heapUsed: 0,
+        heapTotal: 0,
+      }
 
-      metrics.set('count', this.count())
-      metrics.set('nullCount', this.whereNull(Object.keys(collection.items[0])[0] as keyof T).count())
-      metrics.set('uniqueCount', this.unique().count())
-
+      // Get memory metrics
       const memory = process.memoryUsage()
-      metrics.set('heapUsed', memory.heapUsed)
-      metrics.set('heapTotal', memory.heapTotal)
+      metrics.heapUsed = memory.heapUsed
+      metrics.heapTotal = memory.heapTotal
+
+      // Handle null counts only if collection is not empty
+      if (collection.length > 0) {
+        const firstItem = collection.items[0]
+        // Now Object.keys will work correctly with T extends object
+        const fields = Object.keys(firstItem) as Array<keyof T>
+
+        metrics.fieldCount = fields.length
+
+        // Create distribution of null values per field
+        const nullFieldsDistribution = new Map<string, number>()
+
+        for (const field of fields) {
+          const nullCount = collection.items.filter(item => item[field] === null).length
+          nullFieldsDistribution.set(String(field), nullCount)
+          metrics.nullCount += nullCount
+        }
+
+        metrics.nullFieldsDistribution = nullFieldsDistribution
+      }
 
       return metrics
     },
 
-    async profile(): Promise<{ time: number; memory: number }> {
+    async profile(): Promise<{ time: number, memory: number }> {
       const start = process.hrtime()
       const startMemory = process.memoryUsage().heapUsed
 
@@ -1135,26 +1317,26 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       return {
         time: seconds * 1000 + nanoseconds / 1000000,
-        memory: endMemory - startMemory
+        memory: endMemory - startMemory,
       }
     },
 
     transform<U>(schema: Record<keyof U, (item: T) => any>): CollectionOperations<U> {
       return collect(
-        collection.items.map(item => {
+        collection.items.map((item) => {
           const result: Record<string, any> = {}
           for (const [key, transform] of Object.entries(schema)) {
             result[key] = transform(item)
           }
           return result as U
-        })
+        }),
       )
     },
 
     kmeans({ k, maxIterations = 100, distanceMetric = 'euclidean' }: KMeansOptions) {
       // Simple k-means implementation for numeric data
       const data = collection.items.map(item =>
-        Object.values(item).filter(v => typeof v === 'number')
+        Object.values(item).filter(v => typeof v === 'number'),
       ) as number[][]
 
       // Initialize centroids randomly
@@ -1168,21 +1350,21 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       while (iterations < maxIterations) {
         // Assign points to clusters
-        const clusters = data.map(point => {
+        const clusters = data.map((point) => {
           const distances = centroids.map(centroid =>
             distanceMetric === 'euclidean'
               ? Math.sqrt(
-                  point.reduce(
-                    (sum, dim, i) => sum + Math.pow(dim - centroid[i], 2),
-                    0
-                  )
-                )
+                point.reduce(
+                  (sum, dim, i) => sum + (dim - centroid[i]) ** 2,
+                  0,
+                ),
+              )
               : distanceMetric === 'manhattan'
-              ? point.reduce(
+                ? point.reduce(
                   (sum, dim, i) => sum + Math.abs(dim - centroid[i]),
-                  0
+                  0,
                 )
-              : 0 // cosine similarity would go here
+                : 0, // cosine similarity would go here
           )
           return distances.indexOf(Math.min(...distances))
         })
@@ -1191,28 +1373,29 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         previousCentroids = centroids
 
         // Calculate new centroids
-        centroids = Array(k)
+        centroids = new Array(k)
           .fill(0)
           .map((_, i) => {
             const clusterPoints = data.filter((_, index) => clusters[index] === i)
             return clusterPoints[0].map((_, dim) =>
-              clusterPoints.reduce((sum, point) => sum + point[dim], 0) /
-              clusterPoints.length
+              clusterPoints.reduce((sum, point) => sum + point[dim], 0)
+              / clusterPoints.length,
             )
           })
 
         // Check convergence
         const centroidsDiff = centroids.reduce(
           (sum, centroid, i) =>
-            sum +
-            centroid.reduce(
+            sum
+            + centroid.reduce(
               (s, dim, j) => s + Math.abs(dim - previousCentroids[i][j]),
-              0
+              0,
             ),
-          0
+          0,
         )
 
-        if (centroidsDiff < 1e-6) break
+        if (centroidsDiff < 1e-6)
+          break
         iterations++
       }
 
@@ -1222,35 +1405,35 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           cluster: centroids.indexOf(
             centroids.reduce((nearest, centroid) => {
               const point = Object.values(item).filter(
-                v => typeof v === 'number'
+                v => typeof v === 'number',
               ) as number[]
-              const distance =
-                distanceMetric === 'euclidean'
+              const distance
+                = distanceMetric === 'euclidean'
                   ? Math.sqrt(
-                      point.reduce(
-                        (sum, dim, i) =>
-                          sum + Math.pow(dim - centroid[i], 2),
-                        0
-                      )
-                    )
+                    point.reduce(
+                      (sum, dim, i) =>
+                        sum + (dim - centroid[i]) ** 2,
+                      0,
+                    ),
+                  )
                   : distanceMetric === 'manhattan'
-                  ? point.reduce(
+                    ? point.reduce(
                       (sum, dim, i) =>
                         sum + Math.abs(dim - centroid[i]),
-                      0
+                      0,
                     )
-                  : 0
+                    : 0
               return distance < nearest ? centroid : nearest
-            }, centroids[0])
+            }, centroids[0]),
           ),
           data: item,
-        }))
+        })),
       )
     },
 
     async parallel<U>(
       callback: (chunk: CollectionOperations<T>) => Promise<U>,
-      options: { chunks?: number; maxConcurrency?: number } = {}
+      options: { chunks?: number, maxConcurrency?: number } = {},
     ): Promise<CollectionOperations<U>> {
       const { chunks = navigator.hardwareConcurrency || 4, maxConcurrency = chunks } = options
       const chunkSize = Math.ceil(collection.length / chunks)
@@ -1264,7 +1447,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           await Promise.race(runningTasks)
         }
 
-        const task = callback(collect(batch)).then(result => {
+        const task = callback(collect(batch)).then((result) => {
           results.push(result)
           runningTasks.splice(runningTasks.indexOf(task), 1)
         })
@@ -1365,7 +1548,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
           // Collect constraints
           constraints[key] = []
-          if (value !== null) constraints[key].push('NOT NULL')
+          if (value !== null)
+            constraints[key].push('NOT NULL')
           if (typeof value === 'number') {
             const values = collection.items.map(item => item[key as keyof T])
             const min = Math.min(...values as number[])
@@ -1385,7 +1569,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         schema,
         constraints,
         statistics,
-        quality: this.dataQuality()
+        quality: this.dataQuality(),
       }
     },
 
@@ -1396,7 +1580,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           accuracy: 1,
           consistency: 1,
           uniqueness: 1,
-          timeliness: 1
+          timeliness: 1,
         }
       }
 
@@ -1420,22 +1604,195 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         accuracy: 1, // Would need validation rules
         consistency: 1, // Would need business rules
         uniqueness,
-        timeliness: 1 // Would need timestamp analysis
+        timeliness: 1, // Would need timestamp analysis
       }
-    }
+    },
   }
 }
 
 /**
-  * Helper function to create an empty collection
-  */
+ * Creates a new lazy collection operation chain
+ */
+function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOperations<T> {
+  const operations: Array<(value: any) => any> = []
+  let cached: T[] | null = null
+  let batchSize: number | null = null
+
+  async function* executeChain(): AsyncGenerator<T, void, unknown> {
+    if (cached) {
+      for (const item of cached) {
+        yield item
+      }
+      return
+    }
+
+    let index = 0
+    let batch: T[] = []
+
+    for await (let value of generator) {
+      // Apply all operations in the chain
+      for (const operation of operations) {
+        value = operation(value)
+        if (value === undefined)
+          break
+      }
+
+      if (value !== undefined) {
+        if (batchSize) {
+          batch.push(value)
+          if (batch.length >= batchSize) {
+            yield * batch
+            batch = []
+          }
+        }
+        else {
+          yield value
+        }
+      }
+      index++
+    }
+
+    if (batch.length > 0) {
+      yield * batch
+    }
+  }
+
+  return {
+    map<U>(callback: (item: T, index: number) => U): LazyCollectionOperations<U> {
+      let index = 0
+      operations.push((value: T) => callback(value, index++))
+      return createLazyOperations(executeChain() as any)
+    },
+
+    filter(predicate: (item: T, index: number) => boolean): LazyCollectionOperations<T> {
+      let index = 0
+      operations.push((value: T) => predicate(value, index++) ? value : undefined)
+      return createLazyOperations(executeChain())
+    },
+
+    flatMap<U>(callback: (item: T, index: number) => U[]): LazyCollectionOperations<U> {
+      let index = 0
+      operations.push((value: T) => callback(value, index++))
+      return createLazyOperations(executeChain() as any)
+    },
+
+    take(count: number): LazyCollectionOperations<T> {
+      let taken = 0
+      operations.push((value: T) => taken++ < count ? value : undefined)
+      return createLazyOperations(executeChain())
+    },
+
+    skip(count: number): LazyCollectionOperations<T> {
+      let skipped = 0
+      operations.push((value: T) => skipped++ < count ? undefined : value)
+      return createLazyOperations(executeChain())
+    },
+
+    chunk(size: number): LazyCollectionOperations<T[]> {
+      let chunk: T[] = []
+      operations.push((value: T) => {
+        chunk.push(value)
+        if (chunk.length === size) {
+          const result = chunk
+          chunk = []
+          return result
+        }
+        return undefined
+      })
+      return createLazyOperations(executeChain() as any)
+    },
+
+    async toArray(): Promise<T[]> {
+      if (cached)
+        return cached
+
+      const results: T[] = []
+      for await (const item of executeChain()) {
+        results.push(item)
+      }
+      return results
+    },
+
+    async toCollection(): Promise<CollectionOperations<T>> {
+      const array = await this.toArray()
+      return collect(array)
+    },
+
+    async forEach(callback: (item: T) => void): Promise<void> {
+      for await (const item of executeChain()) {
+        callback(item)
+      }
+    },
+
+    async reduce<U>(callback: (accumulator: U, current: T) => U, initial: U): Promise<U> {
+      let result = initial
+      for await (const item of executeChain()) {
+        result = callback(result, item)
+      }
+      return result
+    },
+
+    async count(): Promise<number> {
+      let count = 0
+      for await (const _ of executeChain()) {
+        count++
+      }
+      return count
+    },
+
+    async first(): Promise<T | undefined> {
+      for await (const item of executeChain()) {
+        return item
+      }
+      return undefined
+    },
+
+    async last(): Promise<T | undefined> {
+      let last: T | undefined
+      for await (const item of executeChain()) {
+        last = item
+      }
+      return last
+    },
+
+    async nth(n: number): Promise<T | undefined> {
+      let index = 0
+      for await (const item of executeChain()) {
+        if (index === n)
+          return item
+        index++
+      }
+      return undefined
+    },
+
+    cache(): LazyCollectionOperations<T> {
+      this.toArray().then((array) => {
+        cached = array
+      })
+      return this
+    },
+
+    batch(size: number): LazyCollectionOperations<T> {
+      batchSize = size
+      return this
+    },
+
+    pipe<U>(callback: (lazy: LazyCollectionOperations<T>) => LazyCollectionOperations<U>): LazyCollectionOperations<U> {
+      return callback(this)
+    },
+  }
+}
+
+/**
+ * Helper function to create an empty collection
+ */
 export function emptyCollection<T>(): CollectionOperations<T> {
   return collect([])
 }
 
 /**
-  * Helper function to create a collection from a range of numbers
-  */
+ * Helper function to create a collection from a range of numbers
+ */
 export function range(start: number, end: number, step: number = 1): CollectionOperations<number> {
   const items: number[] = []
   for (let i = start; i <= end; i += step) {
@@ -1445,20 +1802,113 @@ export function range(start: number, end: number, step: number = 1): CollectionO
 }
 
 /**
-  * Helper function to create a collection from a specific value repeated n times
-  */
+ * Helper function to create a collection from a specific value repeated n times
+ */
 export function times<T>(n: number, callback: (index: number) => T): CollectionOperations<T> {
   return collect(Array.from({ length: n }, (_, index) => callback(index)))
 }
 
 /**
-  * Type guard to check if a value is a Collection
-  */
+ * Type guard to check if a value is a Collection
+ */
 export function isCollection<T>(value: any): value is CollectionOperations<T> {
-  return value &&
-    typeof value === 'object' &&
-    Array.isArray(value.items) &&
-    typeof value.length === 'number' &&
-    typeof value.map === 'function' &&
-    typeof value.filter === 'function'
+  return value
+    && typeof value === 'object'
+    && Array.isArray(value.items)
+    && typeof value.length === 'number'
+    && typeof value.map === 'function'
+    && typeof value.filter === 'function'
 }
+
+/**
+ * Helper function to check if two dates are the same day
+ */
+function isSameDay(date1: Date, date2: Date): boolean {
+  return (
+    date1.getFullYear() === date2.getFullYear()
+    && date1.getMonth() === date2.getMonth()
+    && date1.getDate() === date2.getDate()
+  )
+}
+
+/**
+ * Helper function to get the next timestamp based on interval
+ */
+function getNextTimestamp(date: Date, interval: 'day' | 'week' | 'month' | 'year'): number {
+  const nextDate = new Date(date)
+
+  switch (interval) {
+    case 'day':
+      nextDate.setDate(date.getDate() + 1)
+      break
+    case 'week':
+      nextDate.setDate(date.getDate() + 7)
+      break
+    case 'month':
+      nextDate.setMonth(date.getMonth() + 1)
+      break
+    case 'year':
+      nextDate.setFullYear(date.getFullYear() + 1)
+      break
+  }
+
+  return nextDate.getTime()
+}
+
+export const ValidationRules = {
+  required: <T>(): ValidationRule<T> =>
+    (value: T) => value !== undefined && value !== null,
+
+  min: (min: number): ValidationRule<number> =>
+    (value: number) => value >= min,
+
+  max: (max: number): ValidationRule<number> =>
+    (value: number) => value <= max,
+
+  length: (length: number): ValidationRule<string | any[]> =>
+    (value: string | any[]) => value.length === length,
+
+  minLength: (min: number): ValidationRule<string | any[]> =>
+    (value: string | any[]) => value.length >= min,
+
+  maxLength: (max: number): ValidationRule<string | any[]> =>
+    (value: string | any[]) => value.length <= max,
+
+  pattern: (regex: RegExp): ValidationRule<string> =>
+    (value: string) => regex.test(value),
+
+  email: (): ValidationRule<string> =>
+    (value: string) => /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(value),
+
+  url: (): ValidationRule<string> =>
+    (value: string) => {
+      try {
+        new URL(value)
+        return true
+      }
+      catch {
+        return false
+      }
+    },
+
+  numeric: (): ValidationRule<string | number> =>
+    (value: string | number) => !Number.isNaN(Number(value)),
+
+  integer: (): ValidationRule<number> =>
+    (value: number) => Number.isInteger(value),
+
+  positive: (): ValidationRule<number> =>
+    (value: number) => value > 0,
+
+  negative: (): ValidationRule<number> =>
+    (value: number) => value < 0,
+
+  inRange: (min: number, max: number): ValidationRule<number> =>
+    (value: number) => value >= min && value <= max,
+
+  oneOf: <T>(values: T[]): ValidationRule<T> =>
+    (value: T) => values.includes(value),
+
+  custom: <T>(fn: (value: T) => boolean | Promise<boolean>): ValidationRule<T> =>
+    fn,
+} as const

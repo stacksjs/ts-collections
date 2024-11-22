@@ -15,7 +15,9 @@ deps
 destructurable
 entrypoints
 heroicons
+kmeans
 lockb
+ngrams
 openweb
 outdir
 pausable
