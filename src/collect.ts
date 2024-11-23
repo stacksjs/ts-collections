@@ -19,6 +19,20 @@ export function collect<T>(items: T[] | Iterable<T>): CollectionOperations<T> {
  * @internal
  */
 function createCollectionOperations<T>(collection: Collection<T>): CollectionOperations<T> {
+  // Helper function for fuzzy search scoring
+  function calculateFuzzyScore(query: string, value: string): number {
+    let score = 0
+    let lastIndex = -1
+    for (const char of query) {
+      const index = value.indexOf(char, lastIndex + 1)
+      if (index === -1)
+        return 0
+      score += 1 / (index - lastIndex)
+      lastIndex = index
+    }
+    return score
+  }
+
   return {
     ...collection,
 
@@ -1143,6 +1157,578 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       // Initialize lazy operations with the current collection's items
       return createLazyOperations(collectionGenerator(collection.items))
+    },
+
+    mapToGroups<K extends keyof T, V>(callback: (item: T) => [K, V]): Map<K, CollectionOperations<V>> {
+      const groups = new Map<K, V[]>()
+      for (const item of collection.items) {
+        const [key, value] = callback(item)
+        if (!groups.has(key)) {
+          groups.set(key, [])
+        }
+        groups.get(key)!.push(value)
+      }
+      return new Map(
+        Array.from(groups.entries()).map(
+          ([key, items]) => [key, collect(items)],
+        ),
+      )
+    },
+
+    mapSpread<U>(callback: (...args: any[]) => U): CollectionOperations<U> {
+      return collect(collection.items.map(item => callback(...(Array.isArray(item) ? item : [item]))))
+    },
+
+    mapUntil<U>(callback: (item: T, index: number) => U, predicate: (item: U) => boolean): CollectionOperations<U> {
+      const results: U[] = []
+      for (let i = 0; i < collection.items.length; i++) {
+        const result = callback(collection.items[i], i)
+        if (predicate(result))
+          break
+        results.push(result)
+      }
+      return collect(results)
+    },
+
+    pivot<K extends keyof T, V extends keyof T>(keyField: K, valueField: V): Map<T[K], T[V]> {
+      return new Map(
+        collection.items.map(item => [item[keyField], item[valueField]]),
+      )
+    },
+
+    // String operations
+    join(this: CollectionOperations<string>, separator?: string): string {
+      return collection.items.join(separator)
+    },
+
+    implode<K extends keyof T>(key: K, separator: string = ''): string {
+      return collection.items.map(item => String(item[key])).join(separator)
+    },
+
+    lower(this: CollectionOperations<string>): CollectionOperations<string> {
+      return collect(collection.items.map(item => String(item).toLowerCase()))
+    },
+
+    upper(this: CollectionOperations<string>): CollectionOperations<string> {
+      return collect(collection.items.map(item => String(item).toUpperCase()))
+    },
+
+    slug(this: CollectionOperations<string>): CollectionOperations<string> {
+      return collect(collection.items.map(item =>
+        String(item)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, ''),
+      ))
+    },
+
+    // Set operations
+    power(): CollectionOperations<CollectionOperations<T>> {
+      const powerSet: T[][] = [[]]
+      for (const item of collection.items) {
+        const len = powerSet.length
+        for (let i = 0; i < len; i++) {
+          powerSet.push([...powerSet[i], item])
+        }
+      }
+      return collect(powerSet.map(set => collect(set)))
+    },
+
+    // Analysis and statistics
+    correlate<K extends keyof T>(key1: K, key2: K): number {
+      const values1 = collection.items.map(item => Number(item[key1]))
+      const values2 = collection.items.map(item => Number(item[key2]))
+      const mean1 = values1.reduce((a, b) => a + b, 0) / values1.length
+      const mean2 = values2.reduce((a, b) => a + b, 0) / values2.length
+      const variance1 = values1.reduce((a, b) => a + (b - mean1) ** 2, 0)
+      const variance2 = values2.reduce((a, b) => a + (b - mean2) ** 2, 0)
+      const covariance = values1.reduce((a, i, idx) => a + (values1[idx] - mean1) * (values2[idx] - mean2), 0)
+      return covariance / Math.sqrt(variance1 * variance2)
+    },
+
+    outliers<K extends keyof T>(key: K, threshold = 2): CollectionOperations<T> {
+      const values = collection.items.map(item => Number(item[key]))
+      const mean = values.reduce((a, b) => a + b, 0) / values.length
+      const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
+      return collect(collection.items.filter(item =>
+        Math.abs((Number(item[key]) - mean) / std) > threshold,
+      ))
+    },
+
+    // Type conversion
+    cast<U>(constructor: new (...args: any[]) => U): CollectionOperations<U> {
+      return collect(collection.items.map(item => new constructor(item)))
+    },
+
+    // Advanced statistical operations
+    zscore<K extends keyof T>(key: K): CollectionOperations<number> {
+      const values = collection.items.map(item => Number(item[key]))
+      const mean = values.reduce((a, b) => a + b, 0) / values.length
+      const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
+      return collect(values.map(value => (value - mean) / std))
+    },
+
+    kurtosis<K extends keyof T>(key: K): number {
+      const values = collection.items.map(item => Number(item[key]))
+      const mean = values.reduce((a, b) => a + b, 0) / values.length
+      const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
+      const m4 = values.reduce((a, b) => a + (b - mean) ** 4, 0) / values.length
+      return m4 / (std ** 4) - 3
+    },
+
+    skewness<K extends keyof T>(key: K): number {
+      const values = collection.items.map(item => Number(item[key]))
+      const mean = values.reduce((a, b) => a + b, 0) / values.length
+      const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
+      const m3 = values.reduce((a, b) => a + (b - mean) ** 3, 0) / values.length
+      return m3 / (std ** 3)
+    },
+
+    covariance<K extends keyof T>(key1: K, key2: K): number {
+      const values1 = collection.items.map(item => Number(item[key1]))
+      const values2 = collection.items.map(item => Number(item[key2]))
+      const mean1 = values1.reduce((a, b) => a + b, 0) / values1.length
+      const mean2 = values2.reduce((a, b) => a + b, 0) / values2.length
+      return values1.reduce((a, _, i) => a + (values1[i] - mean1) * (values2[i] - mean2), 0) / values1.length
+    },
+
+    entropy<K extends keyof T>(key: K): number {
+      const values = collection.items.map(item => item[key])
+      const frequencies = new Map<T[K], number>()
+      for (const value of values) {
+        frequencies.set(value, (frequencies.get(value) || 0) + 1)
+      }
+      return -Array.from(frequencies.values())
+        .map(freq => freq / values.length)
+        .reduce((a, p) => a + p * Math.log2(p), 0)
+    },
+
+    // Advanced transformations
+    mapOption<U>(callback: (item: T) => U | null | undefined): CollectionOperations<NonNullable<U>> {
+      return collect(
+        collection.items
+          .map(callback)
+          .filter((item): item is NonNullable<U> => item != null),
+      )
+    },
+
+    zipWith<U, R>(other: CollectionOperations<U>, fn: (a: T, b: U) => R): CollectionOperations<R> {
+      const length = Math.min(collection.length, other.count())
+      const results: R[] = []
+      for (let i = 0; i < length; i++) {
+        results.push(fn(collection.items[i], other.toArray()[i]))
+      }
+      return collect(results)
+    },
+
+    scan<U>(callback: (acc: U, item: T) => U, initial: U): CollectionOperations<U> {
+      const results: U[] = []
+      let accumulator = initial
+      for (const item of collection.items) {
+        accumulator = callback(accumulator, item)
+        results.push(accumulator)
+      }
+      return collect(results)
+    },
+
+    unfold<U>(fn: (seed: U) => [T, U] | null, initial: U): CollectionOperations<T> {
+      const results: T[] = []
+      let seed = initial
+      let result = fn(seed)
+      while (result !== null) {
+        const [value, nextSeed] = result
+        results.push(value)
+        seed = nextSeed
+        result = fn(seed)
+      }
+      return collect(results)
+    },
+
+    // Type conversions & casting
+    /**
+     * Cast collection items to a new type
+     * @param type Constructor for the target type
+     */
+    as<U extends Record<string, any>>(type: new () => U): CollectionOperations<U> {
+      return collect(
+        collection.items.map((item) => {
+          // eslint-disable-next-line new-cap
+          const instance = new type()
+          const targetKeys = Object.keys(instance) as Array<keyof U>
+          const sourceItem = item as unknown as Record<string, unknown>
+
+          targetKeys.forEach((key) => {
+            if (key in sourceItem) {
+              instance[key] = sourceItem[key as string] as U[keyof U]
+            }
+          })
+
+          return instance
+        }),
+      )
+    },
+
+    pick<K extends keyof T>(...keys: K[]): CollectionOperations<Pick<T, K>> {
+      return collect(collection.items.map((item) => {
+        const result = {} as Pick<T, K>
+        for (const key of keys) {
+          result[key] = item[key]
+        }
+        return result
+      }))
+    },
+
+    omit<K extends keyof T>(...keys: K[]): CollectionOperations<Omit<T, K>> {
+      const keySet = new Set(keys)
+      return collect(collection.items.map((item) => {
+        const result = {} as Omit<T, K>
+        for (const key of Object.keys(item as object) as Array<keyof T>) {
+          if (!keySet.has(key as K)) {
+            (result as any)[key] = item[key]
+          }
+        }
+        return result
+      }))
+    },
+
+    // Search operations
+    search<K extends keyof T>(
+      query: string,
+      fields: K[],
+      options: { fuzzy?: boolean, weights?: Partial<Record<K, number>> } = {},
+    ): CollectionOperations<T & { score: number }> {
+      const { fuzzy = false, weights = {} as Partial<Record<K, number>> } = options
+      const normalizedQuery = query.toLowerCase()
+
+      return collect(collection.items.map((item) => {
+        let score = 0
+        for (const field of fields) {
+          const value = String(item[field]).toLowerCase()
+          const weight = weights[field] || 1
+          if (fuzzy) {
+            score += calculateFuzzyScore(normalizedQuery, value) * weight
+          }
+          else {
+            score += value.includes(normalizedQuery) ? weight : 0
+          }
+        }
+        return { ...item, score }
+      })).filter(item => item.score > 0).sort((a, b) => b.score - a.score)
+    },
+
+    // Advanced querying operations
+    aggregate<K extends keyof T>(
+      key: K,
+      operations: Array<'sum' | 'avg' | 'min' | 'max' | 'count'>,
+    ): Map<T[K], Record<string, number>> {
+      const groups = this.groupBy(key)
+      const result = new Map<T[K], Record<string, number>>()
+
+      for (const [groupKey, group] of groups.entries()) {
+        const stats: Record<string, number> = {}
+        for (const op of operations) {
+          switch (op) {
+            case 'sum':
+              stats.sum = group.sum()
+              break
+            case 'avg':
+              stats.avg = group.avg()
+              break
+            case 'min':
+              stats.min = Number(group.min())
+              break
+            case 'max':
+              stats.max = Number(group.max())
+              break
+            case 'count':
+              stats.count = group.count()
+              break
+          }
+        }
+        result.set(groupKey, stats)
+      }
+      return result
+    },
+
+    pivotTable<R extends keyof T, C extends keyof T, V extends keyof T>(
+      rows: R,
+      cols: C,
+      values: V,
+      aggregation: 'sum' | 'avg' | 'count',
+    ): Map<T[R], Map<T[C], number>> {
+      const result = new Map<T[R], Map<T[C], number>>()
+      const uniqueRows = new Set(collection.items.map(item => item[rows]))
+      const uniqueCols = new Set(collection.items.map(item => item[cols]))
+
+      for (const row of uniqueRows) {
+        const colMap = new Map<T[C], number>()
+        for (const col of uniqueCols) {
+          const filtered = this.filter(item => item[rows] === row && item[cols] === col)
+          let value: number
+          switch (aggregation) {
+            case 'sum':
+              value = filtered.sum(values)
+              break
+            case 'avg':
+              value = filtered.avg(values)
+              break
+            case 'count':
+              value = filtered.count()
+              break
+          }
+          colMap.set(col, value)
+        }
+        result.set(row, colMap)
+      }
+      return result
+    },
+
+    // Serialization methods
+    toSQL(table: string): string {
+      if (collection.length === 0)
+        return ''
+      const columns = Object.keys(collection.items[0] as object)
+      const values = collection.items.map(item =>
+        `(${columns.map(col => JSON.stringify(item[col as keyof T])).join(', ')})`,
+      ).join(',\n')
+      return `INSERT INTO ${table} (${columns.join(', ')})\nVALUES\n${values};`
+    },
+
+    toGraphQL(typename: string): string {
+      if (collection.length === 0) {
+        return `query {\n  ${typename}s {\n    []\n  }\n}`
+      }
+
+      const fields = Object.keys(collection.items[0] as object)
+      return `query {
+  ${typename}s {
+    nodes {
+${collection.items.map(item =>
+  `      ${typename} {\n${fields.map(field =>
+    `        ${field}: ${JSON.stringify(item[field as keyof T])}`,
+  ).join('\n')
+  }\n      }`,
+).join('\n')}
+    }
+  }
+}`
+    },
+
+    toElastic(index: string): Record<string, any> {
+      return {
+        index,
+        body: collection.items.flatMap(doc => [
+          { index: { _index: index } },
+          doc,
+        ]),
+      }
+    },
+
+    toPandas(): string {
+      if (collection.length === 0)
+        return 'pd.DataFrame()'
+      const items = collection.items.map(item => JSON.stringify(item)).join(',\n  ')
+      return `pd.DataFrame([\n  ${items}\n])`
+    },
+
+    // Developer experience methods
+    playground(): void {
+      // This would normally open an interactive playground
+      // Since we can't actually open one, we'll log the data
+      // eslint-disable-next-line no-console
+      console.log('Collection Playground:', {
+        items: collection.items,
+        length: collection.length,
+        operations: Object.keys(this),
+      })
+    },
+
+    // Advanced mathematical operations
+    fft(
+      this: CollectionOperations<T>,
+    ): T extends number ? CollectionOperations<[number, number]> : never {
+      if (!collection.items.every(item => typeof item === 'number')) {
+        throw new Error('FFT can only be performed on number collections')
+      }
+
+      function fft(x: number[]): [number, number][] {
+        const N = x.length
+        if (N <= 1)
+          return [[x[0], 0]]
+
+        const even = fft(x.filter((_, i) => i % 2 === 0))
+        const odd = fft(x.filter((_, i) => i % 2 === 1))
+        // eslint-disable-next-line unicorn/no-new-array
+        const result: [number, number][] = new Array(N)
+
+        for (let k = 0; k < N / 2; k++) {
+          const angle = -2 * Math.PI * k / N
+          const t = [
+            Math.cos(angle) * odd[k][0] - Math.sin(angle) * odd[k][1],
+            Math.sin(angle) * odd[k][0] + Math.cos(angle) * odd[k][1],
+          ]
+          result[k] = [
+            even[k][0] + t[0],
+            even[k][1] + t[1],
+          ]
+          result[k + N / 2] = [
+            even[k][0] - t[0],
+            even[k][1] - t[1],
+          ]
+        }
+        return result
+      }
+
+      return collect(
+        fft(collection.items as number[]),
+      ) as T extends number ? CollectionOperations<[number, number]> : never
+    },
+
+    interpolate(
+      this: CollectionOperations<T>,
+      points: number,
+    ): T extends number ? CollectionOperations<number> : never {
+      if (!collection.items.every(item => typeof item === 'number')) {
+        throw new Error('Interpolation can only be performed on number collections')
+      }
+
+      const input = collection.items as number[]
+      const result: number[] = []
+      const step = (input.length - 1) / (points - 1)
+
+      for (let i = 0; i < points; i++) {
+        const x = i * step
+        const x0 = Math.floor(x)
+        const x1 = Math.min(Math.ceil(x), input.length - 1)
+        const y0 = input[x0]
+        const y1 = input[x1]
+        result.push(y0 + (y1 - y0) * (x - x0))
+      }
+
+      return collect(result) as T extends number ? CollectionOperations<number> : never
+    },
+
+    convolve(
+      this: CollectionOperations<T>,
+      kernel: number[],
+    ): T extends number ? CollectionOperations<number> : never {
+      if (!collection.items.every(item => typeof item === 'number')) {
+        throw new Error('Convolution can only be performed on number collections')
+      }
+
+      const signal = collection.items as number[]
+      const result: number[] = []
+      const kernelCenter = Math.floor(kernel.length / 2)
+
+      for (let i = 0; i < signal.length; i++) {
+        let sum = 0
+        for (let j = 0; j < kernel.length; j++) {
+          const signalIdx = i - kernelCenter + j
+          if (signalIdx >= 0 && signalIdx < signal.length) {
+            sum += signal[signalIdx] * kernel[j]
+          }
+        }
+        result.push(sum)
+      }
+
+      return collect(result) as T extends number ? CollectionOperations<number> : never
+    },
+
+    differentiate(
+      this: CollectionOperations<T>,
+    ): T extends number ? CollectionOperations<number> : never {
+      if (!collection.items.every(item => typeof item === 'number')) {
+        throw new Error('Differentiation can only be performed on number collections')
+      }
+
+      const items = collection.items as number[]
+      return collect(
+        items.slice(1).map((v, i) => v - items[i]),
+      ) as T extends number ? CollectionOperations<number> : never
+    },
+
+    integrate(
+      this: CollectionOperations<T>,
+    ): T extends number ? CollectionOperations<number> : never {
+      if (!collection.items.every(item => typeof item === 'number')) {
+        throw new Error('Integration can only be performed on number collections')
+      }
+
+      const items = collection.items as number[]
+      const result: number[] = [0]
+      for (let i = 0; i < items.length; i++) {
+        result.push(result[i] + items[i])
+      }
+
+      return collect(result) as T extends number ? CollectionOperations<number> : never
+    },
+
+    // Specialized data types support
+    geoDistance<K extends keyof T>(
+      key: K,
+      point: [number, number],
+      unit: 'km' | 'mi' = 'km',
+    ): CollectionOperations<T & { distance: number }> {
+      function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+        const R = unit === 'km' ? 6371 : 3959 // Earth's radius in km or miles
+        const dLat = (lat2 - lat1) * Math.PI / 180
+        const dLon = (lon2 - lon1) * Math.PI / 180
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+          + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+          * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        return R * c
+      }
+
+      return collect(collection.items.map((item) => {
+        const coords = item[key] as unknown as [number, number]
+        return {
+          ...item,
+          distance: haversine(point[0], point[1], coords[0], coords[1]),
+        }
+      }))
+    },
+
+    money<K extends keyof T>(
+      key: K,
+      currency: string = 'USD',
+    ): CollectionOperations<T & { formatted: string }> {
+      const formatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+      })
+
+      return collect(collection.items.map(item => ({
+        ...item,
+        formatted: formatter.format(Number(item[key])),
+      })))
+    },
+
+    dateTime<K extends keyof T>(
+      key: K,
+      format: string = 'en-US',
+    ): CollectionOperations<T & { formatted: string }> {
+      return collect(collection.items.map(item => ({
+        ...item,
+        formatted: new Date(item[key] as any).toLocaleString(format),
+      })))
+    },
+
+    // Configuration method
+    configure(options: {
+      precision?: number
+      timezone?: string
+      locale?: string
+      errorHandling?: 'strict' | 'loose'
+    }): void {
+      if (options.locale) {
+        Intl.NumberFormat.prototype.format = new Intl.NumberFormat(options.locale).format
+      }
+      if (options.timezone) {
+        Intl.DateTimeFormat.prototype.format = new Intl.DateTimeFormat(undefined, {
+          timeZone: options.timezone,
+        }).format
+      }
     },
   }
 }

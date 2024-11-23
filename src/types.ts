@@ -407,11 +407,18 @@ export interface CollectionOperations<T> extends Collection<T> {
   setDiff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
 
   // Advanced Querying & Search
+  /**
+   * Search through collection items using string matching
+   * @param query Search query string
+   * @param fields Fields to search in
+   * @param options Search options including fuzzy matching and field weights
+   */
   search: <K extends keyof T>(
     query: string,
     fields: K[],
-    options?: { fuzzy?: boolean, weights?: Record<K, number> }
+    options?: { fuzzy?: boolean, weights?: Partial<Record<K, number>> }
   ) => CollectionOperations<T & { score: number }>
+
   aggregate: <K extends keyof T>(
     key: K,
     operations: Array<'sum' | 'avg' | 'min' | 'max' | 'count'>
@@ -433,6 +440,10 @@ export interface CollectionOperations<T> extends Collection<T> {
 
   // Export & Integration
   toSQL: (table: string) => string
+  /**
+   * Convert collection to GraphQL-formatted string
+   * @param typename The GraphQL type name for the objects
+   */
   toGraphQL: (typename: string) => string
   toElastic: (index: string) => Record<string, any>
   toPandas: () => string // Returns Python code for pandas DataFrame
@@ -452,11 +463,22 @@ export interface CollectionOperations<T> extends Collection<T> {
   }>
 
   // Advanced Mathematical Operations
-  fft: (this: CollectionOperations<number>) => CollectionOperations<[number, number]> // Returns [real, imaginary]
-  interpolate: (this: CollectionOperations<number>, points: number) => CollectionOperations<number>
-  convolve: (this: CollectionOperations<number>, kernel: number[]) => CollectionOperations<number>
-  differentiate: (this: CollectionOperations<number>) => CollectionOperations<number>
-  integrate: (this: CollectionOperations<number>) => CollectionOperations<number>
+  /**
+   * Compute Fast Fourier Transform
+   * Only available when T is number
+   */
+  fft: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<[number, number]> : never
+  interpolate: (
+    this: CollectionOperations<T>,
+    points: number
+  ) => T extends number ? CollectionOperations<number> : never
+  /**
+   * Compute convolution with a kernel
+   * Only available when T is number
+   */
+  convolve: (this: CollectionOperations<T>, kernel: number[]) => T extends number ? CollectionOperations<number> : never
+  differentiate: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<number> : never
+  integrate: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<number> : never
 
   // Specialized Data Types Support
   geoDistance: <K extends keyof T>(
