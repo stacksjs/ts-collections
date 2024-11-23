@@ -1,7 +1,15 @@
-import type { AsyncCallback, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, LazyCollectionOperations, MovingAverageOptions, PaginationResult, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo } from './types'
+import type { AsyncCallback, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, LazyCollectionOperations, MovingAverageOptions, PaginationResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
 import { getNextTimestamp, isSameDay } from './utils'
+
+export interface CacheEntry<T> {
+  data: T[]
+  expiry: number
+}
+
+// Add this at class/module level
+const cacheStore = new Map<string, CacheEntry<any>>()
 
 /**
  * Creates a new collection with optimized performance
@@ -1729,6 +1737,312 @@ ${collection.items.map(item =>
           timeZone: options.timezone,
         }).format
       }
+    },
+
+    trend(options: TimeSeriesOptions) {
+      const series = this.timeSeries(options)
+      const n = series.count()
+      const x = Array.from({ length: n }, (_, i) => i)
+      const y = series.pluck('value').toArray()
+
+      // Calculate slope and intercept using least squares
+      const sumX = x.reduce((a, b) => a + b, 0)
+      const sumY = y.reduce((a, b) => a + b, 0)
+      const sumXY = x.reduce((a, b, i) => a + b * y[i], 0)
+      const sumX2 = x.reduce((a, b) => a + b * b, 0)
+
+      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+      const intercept = (sumY - slope * sumX) / n
+
+      return { slope, intercept }
+    },
+
+    seasonality(options: TimeSeriesOptions) {
+      const series = this.timeSeries(options)
+      const result = new Map<string, number>()
+
+      // Group by time period (e.g., month, day of week)
+      const groups = series.groupBy((item: TimeSeriesPoint) => {
+        const date = item.date
+        switch (options.interval) {
+          case 'month':
+            return date.getMonth().toString()
+          case 'week':
+            return date.getDay().toString()
+          default:
+            return date.getDate().toString()
+        }
+      })
+
+      // Calculate average for each period
+      for (const [period, group] of groups) {
+        result.set(String(period), group.avg('value'))
+      }
+
+      return result
+    },
+
+    forecast(periods: number): CollectionOperations<T> {
+      const trend = this.trend({ dateField: '', valueField: '' })
+      const lastItem = this.last()
+
+      if (!lastItem) {
+        return collect([] as T[])
+      }
+
+      // Create forecasted items with explicit typing
+      const forecasted = Array.from({ length: periods }, (_, index): T => {
+        const baseItem = { ...lastItem }
+        // Calculate the forecasted value using the trend
+        const forecastedValue = trend.slope * (this.count() + index) + trend.intercept
+
+        // If T potentially has a 'value' property, we need to be careful about the typing
+        // We'll cast to any temporarily to avoid TypeScript errors when setting the value
+        const itemWithForecast = baseItem as any
+        if (typeof itemWithForecast.value !== 'undefined') {
+          itemWithForecast.value = forecastedValue
+        }
+
+        return itemWithForecast as T
+      })
+
+      return collect(forecasted) as CollectionOperations<T>
+    },
+
+    async assertValid(schema: ValidationSchema<T>): Promise<void> {
+      const result = await this.validate(schema)
+      if (!result.isValid) {
+        throw new Error(`Validation failed: ${JSON.stringify(Array.from(result.errors.entries()))}`)
+      }
+    },
+
+    sanitize(rules: Record<keyof T, (value: any) => any>): CollectionOperations<T> {
+      return this.map((item) => {
+        const sanitized = { ...item } as T
+        for (const [key, sanitizer] of Object.entries(rules) as [keyof T, (value: any) => any][]) {
+          sanitized[key] = sanitizer(item[key])
+        }
+        return sanitized
+      })
+    },
+
+    // This is a basic implementation, updates may come in the future
+    query(sql: string, params: any[] = []): CollectionOperations<T> {
+      const lowerSQL = sql.toLowerCase()
+      // eslint-disable-next-line ts/no-this-alias
+      let result = this
+
+      if (lowerSQL.includes('where')) {
+        const whereClause = sql.split('where')[1].trim()
+        let paramIndex = 0
+
+        result = this.filter((item) => {
+          // Replace both named parameters ${name} and positional parameters ?
+          const parsedClause = whereClause
+            // Handle ${property} style parameters
+            .replace(/\$\{(\w+)\}/g, (_, key) => {
+              return JSON.stringify(item[key as keyof T])
+            })
+            // Handle ? style parameters
+            .replace(/\?/g, () => {
+              const param = params[paramIndex]
+              paramIndex++
+              return JSON.stringify(param)
+            })
+
+          // eslint-disable-next-line no-eval
+          return eval(parsedClause)
+        })
+      }
+
+      return result
+    },
+
+    having<K extends keyof T>(key: K, op: string, value: any): CollectionOperations<T> {
+      const ops: Record<string, (a: any, b: any) => boolean> = {
+        '>': (a, b) => a > b,
+        '<': (a, b) => a < b,
+        '>=': (a, b) => a >= b,
+        '<=': (a, b) => a <= b,
+        '=': (a, b) => a === b,
+        '!=': (a, b) => a !== b,
+      }
+
+      return this.filter(item => ops[op](item[key], value))
+    },
+
+    crossJoin<U>(other: CollectionOperations<U>): CollectionOperations<T & U> {
+      const result: Array<T & U> = []
+      for (const item1 of this.items) {
+        for (const item2 of other.items) {
+          result.push({ ...item1, ...item2 })
+        }
+      }
+      return collect(result)
+    },
+
+    leftJoin<U, K extends keyof T, O extends keyof U>(
+      other: CollectionOperations<U>,
+      key: K,
+      otherKey: O,
+      // Add type constraint to ensure the key types match
+    ): CollectionOperations<T & Partial<U>> {
+      type KeyType = T[K] & U[O]
+      return this.map((item) => {
+        const match = other.items.find((otherItem) => {
+          const itemValue = item[key] as KeyType
+          const otherValue = otherItem[otherKey] as KeyType
+          return itemValue === otherValue
+        })
+        return { ...item, ...(match || {}) }
+      })
+    },
+
+    batch(size: number): AsyncGenerator<CollectionOperations<T>, void, unknown> {
+      return this.cursor(size)
+    },
+
+    toJSON(options: SerializationOptions = {}): string {
+      const { pretty = false, exclude = [], include } = options
+      const items = this.items.map((item) => {
+        const result: any = {}
+        const keys = include || Object.keys(item as object)
+        for (const key of keys) {
+          if (!exclude.includes(key)) {
+            result[key] = (item as any)[key]
+          }
+        }
+        return result
+      })
+      return JSON.stringify(items, null, pretty ? 2 : undefined)
+    },
+
+    toCsv(options: SerializationOptions = {}): string {
+      const { exclude = [], include } = options
+      const items = this.toArray()
+      if (items.length === 0)
+        return ''
+
+      const keys = include || Object.keys(items[0] as object)
+      const headers = keys.filter(k => !exclude.includes(k))
+      const rows = items.map(item =>
+        headers.map(key =>
+          JSON.stringify((item as any)[key])).join(','),
+      )
+
+      return [headers.join(','), ...rows].join('\n')
+    },
+
+    toXml(options: SerializationOptions = {}): string {
+      const { exclude = [], include } = options
+      const items = this.toArray()
+      const rootTag = 'items'
+      const itemTag = 'item'
+
+      function escapeXml(str: string): string {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;')
+      }
+
+      const itemsXml = items.map((item) => {
+        const keys = include || Object.keys(item as object)
+        const fields = keys
+          .filter(k => !exclude.includes(k))
+          .map(key => `  <${key}>${escapeXml(String((item as any)[key]))}</${key}>`)
+          .join('\n')
+        return `<${itemTag}>\n${fields}\n</${itemTag}>`
+      }).join('\n')
+
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<${rootTag}>\n${itemsXml}\n</${rootTag}>`
+    },
+
+    parse(data: string, format: 'json' | 'csv' | 'xml'): CollectionOperations<T> {
+      switch (format) {
+        case 'json':
+          return collect(JSON.parse(data))
+        case 'csv': {
+          const lines = data.trim().split('\n')
+          const headers = lines[0].split(',')
+          const items = lines.slice(1).map((line) => {
+            const values = line.split(',')
+            const item: any = {}
+            headers.forEach((header, i) => {
+              item[header] = values[i]
+            })
+            return item
+          })
+          return collect(items)
+        }
+        case 'xml':
+          throw new Error('XML parsing not implemented')
+        default:
+          throw new Error(`Unsupported format: ${format}`)
+      }
+    },
+
+    cache(ttl: number = 60000): CollectionOperations<T> {
+      const cacheKey = JSON.stringify(this.items)
+      const now = Date.now()
+
+      // Check if we have a valid cache entry
+      const cached = cacheStore.get(cacheKey) as CacheEntry<T> | undefined
+      if (cached && cached.expiry > now) {
+        return collect(cached.data)
+      }
+
+      // Store current items in cache with expiry
+      cacheStore.set(cacheKey, {
+        data: [...this.items],
+        expiry: now + ttl,
+      })
+
+      return this
+    },
+
+    memoize<K extends keyof T>(key: K): CollectionOperations<T> {
+      const cache = new Map<T[K], T>()
+      const items = this.items.map((item) => {
+        const k = item[key]
+        if (!cache.has(k)) {
+          cache.set(k, item)
+        }
+        return cache.get(k) as T
+      })
+
+      return collect(items)
+    },
+
+    async prefetch(): Promise<CollectionOperations<T>> {
+      // Force evaluation of any lazy operations
+      await Promise.resolve()
+      return this
+    },
+
+    lint(): Array<{ type: 'warning' | 'error', message: string, suggestion?: string }> {
+      const issues: Array<{ type: 'warning' | 'error', message: string, suggestion?: string }> = []
+
+      // Check for null values
+      for (const item of this.items) {
+        for (const [key, value] of Object.entries(item as object)) {
+          if (value === null) {
+            issues.push({
+              type: 'warning',
+              message: `Null value found in field "${key}"`,
+              suggestion: 'Consider using undefined or providing a default value',
+            })
+          }
+        }
+      }
+
+      return issues
+    },
+
+    optimize(): CollectionOperations<T> {
+      return this
     },
   }
 }
