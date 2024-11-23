@@ -1290,7 +1290,7 @@ describe('Collection Utility Methods', () => {
       // Even if we try to modify the collection in the callback
       collection.tap((items) => {
         items.items[0].value = 'modified'
-        // @ts-ignore - intentionally trying to modify private property
+        // @ts-expect-error - intentionally trying to modify private property
         items.items = []
       })
 
@@ -1324,17 +1324,22 @@ describe('Collection Utility Methods', () => {
       // Empty collection
       const empty = collect<number>([])
       let emptyCalled = false
-      empty.tap(() => { emptyCalled = true })
+      empty.tap(() => {
+        emptyCalled = true
+      })
       expect(emptyCalled).toBe(true)
 
       // Null values
       const withNull = collect([null, undefined, 1])
       let nullCount = 0
-      withNull.tap((items) => { nullCount = items.count() })
+      withNull.tap((items) => {
+        nullCount = items.count()
+      })
       expect(nullCount).toBe(3)
 
       // Multiple taps
-      let count1 = 0; let count2 = 0
+      let count1 = 0
+      let count2 = 0
       collect([1, 2, 3])
         .tap((items) => { count1 = items.count() })
         .tap((items) => { count2 = items.sum() })
@@ -1441,19 +1446,211 @@ describe('Collection Utility Methods', () => {
   })
 })
 
-// describe('Collection Async Operations', () => {
-//   describe('mapAsync()', () => {
-//     it('should transform items asynchronously', () => expect(true).toBe(true))
-//     it('should maintain order', () => expect(true).toBe(true))
-//     it('should handle rejections', () => expect(true).toBe(true))
-//   })
+describe('Collection Async Operations', () => {
+  describe('mapAsync()', () => {
+    it('should transform items asynchronously', async () => {
+      const collection = collect([1, 2, 3])
 
-//   describe('filterAsync()', () => {
-//     it('should filter items asynchronously', () => expect(true).toBe(true))
-//     it('should handle async predicates', () => expect(true).toBe(true))
-//     it('should handle rejections', () => expect(true).toBe(true))
-//   })
-// })
+      const result = await collection.mapAsync(async (num) => {
+        await new Promise(resolve => setTimeout(resolve, 10))
+        return num * 2
+      })
+
+      expect(result.toArray()).toEqual([2, 4, 6])
+    })
+
+    it('should maintain order', async () => {
+      const collection = collect([3, 1, 4])
+
+      const result = await collection.mapAsync(async (num) => {
+        // Simulate varying response times
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 50))
+        return num * 2
+      })
+
+      expect(result.toArray()).toEqual([6, 2, 8])
+    })
+
+    it('should handle complex transformations', async () => {
+      interface User {
+        id: number
+        name: string
+      }
+
+      interface UserWithPosts {
+        id: number
+        name: string
+        posts: string[]
+      }
+
+      const users: User[] = [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ]
+
+      // Simulate async fetch of posts
+      const fetchPosts = async (userId: number): Promise<string[]> => {
+        await new Promise(resolve => setTimeout(resolve, 10))
+        return [`Post ${userId}-1`, `Post ${userId}-2`]
+      }
+
+      const result = await collect(users).mapAsync(async (user): Promise<UserWithPosts> => {
+        const posts = await fetchPosts(user.id)
+        return { ...user, posts }
+      })
+
+      expect(result.toArray()).toEqual([
+        { id: 1, name: 'John', posts: ['Post 1-1', 'Post 1-2'] },
+        { id: 2, name: 'Jane', posts: ['Post 2-1', 'Post 2-2'] },
+      ])
+    })
+
+    it('should handle empty collections', async () => {
+      const empty = collect<number>([])
+      const result = await empty.mapAsync(async num => num * 2)
+      expect(result.toArray()).toEqual([])
+    })
+
+    it('should handle null and undefined values', async () => {
+      const collection = collect([null, 1, undefined, 2])
+
+      const result = await collection.mapAsync(async (item) => {
+        if (item === null)
+          return 'null'
+        if (item === undefined)
+          return 'undefined'
+        return item.toString()
+      })
+
+      expect(result.toArray()).toEqual(['null', '1', 'undefined', '2'])
+    })
+
+    it('should handle rejections', async () => {
+      const collection = collect([1, 2, 3])
+
+      await expect(collection.mapAsync(async (num) => {
+        if (num === 2)
+          throw new Error('Test error')
+        return num * 2
+      })).rejects.toThrow('Test error')
+    })
+
+    it('should handle concurrent operations', async () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const startTime = Date.now()
+
+      const result = await collection.mapAsync(async (num) => {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        return num * 2
+      })
+
+      const duration = Date.now() - startTime
+      expect(duration).toBeLessThan(200) // Should run concurrently
+      expect(result.toArray()).toEqual([2, 4, 6, 8, 10])
+    })
+  })
+
+  describe('filterAsync()', () => {
+    it('should filter items asynchronously', async () => {
+      const collection = collect([1, 2, 3, 4, 5])
+
+      const result = await collection.filterAsync(async (num) => {
+        await new Promise(resolve => setTimeout(resolve, 10))
+        return num % 2 === 0
+      })
+
+      expect(result.toArray()).toEqual([2, 4])
+    })
+
+    it('should handle async predicates', async () => {
+      interface User {
+        id: number
+        name: string
+      }
+
+      const users = collect<User>([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+        { id: 3, name: 'Bob' },
+      ])
+
+      // Simulate async permission check
+      const hasPermission = async (userId: number): Promise<boolean> => {
+        await new Promise(resolve => setTimeout(resolve, 10))
+        return userId % 2 === 0
+      }
+
+      const result = await users.filterAsync(async (user) => {
+        return await hasPermission(user.id)
+      })
+
+      expect(result.toArray()).toEqual([{ id: 2, name: 'Jane' }])
+    })
+
+    it('should maintain order of filtered items', async () => {
+      const collection = collect([5, 2, 8, 1, 9, 4, 6])
+
+      const result = await collection.filterAsync(async (num) => {
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 50))
+        return num % 2 === 0
+      })
+
+      expect(result.toArray()).toEqual([2, 8, 4, 6])
+    })
+
+    it('should handle empty collections', async () => {
+      const empty = collect<number>([])
+      const result = await empty.filterAsync(async num => num > 0)
+      expect(result.toArray()).toEqual([])
+    })
+
+    it('should handle null and undefined values', async () => {
+      const collection = collect([null, 1, undefined, 2, null])
+
+      const result = await collection.filterAsync(async (item) => {
+        await new Promise(resolve => setTimeout(resolve, 10))
+        return item !== null && item !== undefined
+      })
+
+      expect(result.toArray()).toEqual([1, 2])
+    })
+
+    it('should handle rejections', async () => {
+      const collection = collect([1, 2, 3])
+
+      await expect(collection.filterAsync(async (num) => {
+        if (num === 2)
+          throw new Error('Test error')
+        return true
+      })).rejects.toThrow('Test error')
+    })
+
+    it('should handle boolean coercion correctly', async () => {
+      const collection = collect([0, 1, '', 'test', null, undefined, false, true])
+
+      const result = await collection.filterAsync(async (item) => {
+        await new Promise(resolve => setTimeout(resolve, 10))
+        return Boolean(item)
+      })
+
+      expect(result.toArray()).toEqual([1, 'test', true])
+    })
+
+    it('should handle concurrent filtering', async () => {
+      const collection = collect(Array.from({ length: 5 }, (_, i) => i + 1))
+      const startTime = Date.now()
+
+      const result = await collection.filterAsync(async (num) => {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        return num % 2 === 0
+      })
+
+      const duration = Date.now() - startTime
+      expect(duration).toBeLessThan(200) // Should run concurrently
+      expect(result.toArray()).toEqual([2, 4])
+    })
+  })
+})
 
 // describe('Collection Advanced Features', () => {
 //   describe('timeSeries()', () => {
