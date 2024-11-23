@@ -1,4 +1,4 @@
-import type { AsyncCallback, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, LazyCollectionOperations, MovingAverageOptions, PaginationResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo } from './types'
+import type { AnomalyDetectionOptions, AsyncCallback, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, LazyCollectionOperations, MovingAverageOptions, PaginationResult, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo, VersionStore } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
 import { getNextTimestamp, isSameDay } from './utils'
@@ -27,6 +27,12 @@ export function collect<T>(items: T[] | Iterable<T>): CollectionOperations<T> {
  * @internal
  */
 function createCollectionOperations<T>(collection: Collection<T>): CollectionOperations<T> {
+  const versionStore: VersionStore<T> = {
+    currentVersion: 0,
+    snapshots: new Map(),
+    changes: [],
+  }
+
   // Helper function for fuzzy search scoring
   function calculateFuzzyScore(query: string, value: string): number {
     let score = 0
@@ -292,12 +298,133 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     diff(version1: number, version2: number): CollectionOperations<VersionInfo<T>> {
-      const history = this.history().toArray()
-      const changes = history.filter(v =>
-        v.version >= Math.min(version1, version2)
-        && v.version <= Math.max(version1, version2),
+      // Ensure both versions exist
+      if (!versionStore.snapshots.has(version1) || !versionStore.snapshots.has(version2)) {
+        throw new Error('One or both versions do not exist')
+      }
+
+      // Get snapshots for both versions
+      const snapshot1 = versionStore.snapshots.get(version1)!
+      const snapshot2 = versionStore.snapshots.get(version2)!
+
+      // Initialize changes array
+      const changes: VersionInfo<T>['changes'] = []
+
+      // Find added items (present in version2 but not in version1)
+      const addedItems = snapshot2.items.filter(item2 =>
+        !snapshot1.items.some(item1 =>
+          JSON.stringify(item1) === JSON.stringify(item2)
+        )
       )
-      return collect(changes)
+
+      // Find removed items (present in version1 but not in version2)
+      const removedItems = snapshot1.items.filter(item1 =>
+        !snapshot2.items.some(item2 =>
+          JSON.stringify(item1) === JSON.stringify(item2)
+        )
+      )
+
+      // Find updated items (have the same keys but different values)
+      const updatedItems = snapshot2.items.filter(item2 =>
+        snapshot1.items.some(item1 => {
+          // Properly type cast the objects for Object.keys
+          const item1Obj = item1 as Record<string, unknown>
+          const item2Obj = item2 as Record<string, unknown>
+
+          const item1Keys = Object.keys(item1Obj)
+          const item2Keys = Object.keys(item2Obj)
+
+          // Check if items have the same keys
+          const sameKeys = item1Keys.length === item2Keys.length &&
+            item1Keys.every(key => item2Keys.includes(key))
+
+          // Check if any values are different
+          const hasChanges = sameKeys && item1Keys.some(key =>
+            JSON.stringify(item1Obj[key]) !== JSON.stringify(item2Obj[key])
+          )
+
+          return sameKeys && hasChanges
+        })
+      )
+
+      // Record all changes with their types
+      addedItems.forEach(item => {
+        changes.push({
+          type: 'add',
+          item
+        })
+      })
+
+      removedItems.forEach(item => {
+        changes.push({
+          type: 'delete',
+          item
+        })
+      })
+
+      updatedItems.forEach(item => {
+        // Find the previous version of this item
+        const itemObj = item as Record<string, unknown>
+        const previousItem = snapshot1.items.find(item1 => {
+          const item1Obj = item1 as Record<string, unknown>
+          return Object.keys(item1Obj).every(key =>
+            Object.keys(itemObj).includes(key)
+          )
+        })
+
+        changes.push({
+          type: 'update',
+          item,
+          previousItem
+        })
+      })
+
+      // Create a VersionInfo object with the changes
+      const versionInfo: VersionInfo<T>[] = [{
+        version: Math.max(version1, version2),
+        timestamp: new Date(),
+        changes
+      }]
+
+      return collect(versionInfo)
+    },
+
+    diffSummary(version1: number, version2: number) {
+      const diffResult = this.diff(version1, version2)
+      // Properly type the first() result and access to changes
+      const versionInfo = diffResult.first() as VersionInfo<T> | undefined
+      const changes = versionInfo?.changes || []
+
+      return {
+        added: changes.filter((c: { type: 'add' | 'update' | 'delete' }) => c.type === 'add').length,
+        removed: changes.filter((c: { type: 'add' | 'update' | 'delete' }) => c.type === 'delete').length,
+        updated: changes.filter((c: { type: 'add' | 'update' | 'delete' }) => c.type === 'update').length,
+        changes: changes.map((change: {
+          type: 'add' | 'update' | 'delete'
+          item: T
+          previousItem?: T
+        }) => {
+          if (change.type === 'update' && change.previousItem) {
+            // Properly type cast the objects for Object.keys
+            const itemObj = change.item as Record<string, unknown>
+            const prevItemObj = change.previousItem as Record<string, unknown>
+
+            const changedFields = Object.keys(itemObj).filter((key) => {
+              return JSON.stringify(itemObj[key]) !== JSON.stringify(prevItemObj[key])
+            })
+
+            return changedFields.map(field => ({
+              type: change.type,
+              field: field as keyof T,
+              oldValue: change.previousItem![field as keyof T],
+              newValue: change.item[field as keyof T],
+            }))
+          }
+          return [{
+            type: change.type,
+          }]
+        }).flat(),
+      }
     },
 
     intersect(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
@@ -2041,8 +2168,386 @@ ${collection.items.map(item =>
       return issues
     },
 
+    sentiment(this: CollectionOperations<string>): CollectionOperations<{ score: number, comparative: number }> {
+      // Basic sentiment analysis using a simple positive/negative word approach
+      const positiveWords = new Set(['good', 'great', 'awesome', 'excellent', 'happy', 'love'])
+      const negativeWords = new Set(['bad', 'terrible', 'awful', 'horrible', 'sad', 'hate'])
+
+      return this.map((text) => {
+        const words = text.toLowerCase().split(/\s+/)
+        let score = 0
+        words.forEach((word) => {
+          if (positiveWords.has(word))
+            score++
+          if (negativeWords.has(word))
+            score--
+        })
+        return {
+          score,
+          comparative: score / words.length,
+        }
+      })
+    },
+
+    wordFrequency(this: CollectionOperations<string>): Map<string, number> {
+      const frequency = new Map<string, number>()
+      this.items.forEach((text) => {
+        const words = text.toLowerCase().split(/\s+/)
+        words.forEach((word) => {
+          frequency.set(word, (frequency.get(word) || 0) + 1)
+        })
+      })
+      return frequency
+    },
+
+    ngrams(this: CollectionOperations<string>, n: number): CollectionOperations<string> {
+      return collect(
+        this.items.flatMap((text) => {
+          const words = text.split(/\s+/)
+          const ngrams: string[] = []
+          for (let i = 0; i <= words.length - n; i++) {
+            ngrams.push(words.slice(i, i + n).join(' '))
+          }
+          return ngrams
+        }),
+      )
+    },
+
+    instrument(callback: (stats: Map<string, number>) => void): CollectionOperations<T> {
+      const stats = new Map<string, number>()
+      stats.set('count', this.count())
+      stats.set('operations', 0)
+      stats.set('timeStart', Date.now())
+
+      const proxy = new Proxy(this, {
+        get(target: any, prop: string) {
+          if (typeof target[prop] === 'function') {
+            stats.set('operations', (stats.get('operations') || 0) + 1)
+          }
+          return target[prop]
+        },
+      })
+
+      callback(stats)
+      return proxy as CollectionOperations<T>
+    },
+
     optimize(): CollectionOperations<T> {
-      return this
+      // Cache results if collection is accessed multiple times
+      const cached = this.cache()
+
+      // Index frequently accessed fields
+      if (this.count() > 1000) {
+        const firstItem = this.first()
+        if (firstItem) {
+          const keys = Object.keys(firstItem) as Array<keyof T>
+          cached.index(keys)
+        }
+      }
+
+      return cached
+    },
+
+    removeOutliers<K extends keyof T>(key: K, threshold = 2): CollectionOperations<T> {
+      const values = this.pluck(key).toArray()
+      const mean = values.reduce((a, b) => Number(a) + Number(b), 0) / values.length
+      const stdDev = Math.sqrt(
+        values.reduce((a, b) => a + (Number(b) - mean) ** 2, 0) / values.length,
+      )
+
+      return this.filter((item) => {
+        const value = Number(item[key])
+        return Math.abs((value - mean) / stdDev) <= threshold
+      })
+    },
+
+    impute<K extends keyof T>(key: K, strategy: 'mean' | 'median' | 'mode'): CollectionOperations<T> {
+      const values = this.pluck(key).toArray()
+      let replacementValue: T[K]
+
+      switch (strategy) {
+        case 'mean': {
+          const sum = values.reduce((a, b) => Number(a) + Number(b), 0)
+          replacementValue = (sum / values.length) as T[K]
+          break
+        }
+        case 'median': {
+          const sorted = [...values].sort((a, b) => Number(a) - Number(b))
+          const mid = Math.floor(sorted.length / 2)
+          replacementValue = sorted[mid]
+          break
+        }
+        case 'mode': {
+          const frequency = new Map<T[K], number>()
+          let maxFreq = 0
+          let mode = values[0]
+
+          for (const value of values) {
+            const count = (frequency.get(value) || 0) + 1
+            frequency.set(value, count)
+            if (count > maxFreq) {
+              maxFreq = count
+              mode = value
+            }
+          }
+          replacementValue = mode
+          break
+        }
+      }
+
+      return this.map(item => ({
+        ...item,
+        [key]: item[key] ?? replacementValue,
+      })) as CollectionOperations<T>
+    },
+
+    normalize<K extends keyof T>(
+      key: K,
+      method: 'minmax' | 'zscore',
+    ): CollectionOperations<T> {
+      const values = this.pluck(key).toArray().map(Number)
+
+      if (method === 'minmax') {
+        const min = Math.min(...values)
+        const max = Math.max(...values)
+        const range = max - min
+
+        return this.map(item => ({
+          ...item,
+          [key]: range !== 0 ? (Number(item[key]) - min) / range : 0,
+        })) as CollectionOperations<T>
+      }
+
+      // z-score normalization
+      const mean = values.reduce((a, b) => a + b, 0) / values.length
+      const stdDev = Math.sqrt(
+        values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length,
+      )
+
+      return this.map(item => ({
+        ...item,
+        [key]: stdDev !== 0 ? (Number(item[key]) - mean) / stdDev : 0,
+      })) as CollectionOperations<T>
+    },
+
+    // Add these methods to your createCollectionOperations return object
+
+    linearRegression<K extends keyof T>(
+      dependent: K,
+      independents: K[],
+    ): RegressionResult {
+      const X = this.items.map(item =>
+        [1, ...independents.map(ind => Number(item[ind]))],
+      )
+      const y = this.items.map(item => Number(item[dependent]))
+      const n = X.length
+
+      // Calculate coefficients using normal equation: β = (X'X)^-1 X'y
+      const XT = X[0].map((_, i) => X.map(row => row[i])) // transpose
+      const XTX = XT.map(row =>
+        X[0].map((_, j) =>
+          row.reduce((sum, val, k) => sum + val * X[k][j], 0),
+        ),
+      )
+
+      // Matrix inverse using determinant (simplified for demo)
+      const det = XTX[0][0] * XTX[1][1] - XTX[0][1] * XTX[1][0]
+      const XTXinv = [
+        [XTX[1][1] / det, -XTX[0][1] / det],
+        [-XTX[1][0] / det, XTX[0][0] / det],
+      ]
+
+      const XTy = XT.map(row =>
+        row.reduce((sum, val, i) => sum + val * y[i], 0),
+      )
+
+      const coefficients = XTXinv.map(row =>
+        row.reduce((sum, val, i) => sum + val * XTy[i], 0),
+      )
+
+      // Calculate predictions and residuals
+      const predictions = X.map(row =>
+        row.reduce((sum, val, i) => sum + val * coefficients[i], 0),
+      )
+
+      const residuals = y.map((actual, i) => actual - predictions[i])
+
+      // Calculate R-squared
+      const yMean = y.reduce((a, b) => a + b, 0) / n
+      const totalSS = y.reduce((ss, val) => ss + (val - yMean) ** 2, 0)
+      const residualSS = residuals.reduce((ss, val) => ss + val ** 2, 0)
+      const rSquared = 1 - (residualSS / totalSS)
+
+      return {
+        coefficients,
+        rSquared,
+        predictions,
+        residuals,
+      }
+    },
+
+    knn<K extends keyof T>(
+      point: Pick<T, K>,
+      k: number,
+      features: K[],
+    ): CollectionOperations<T> {
+      // Calculate Euclidean distance
+      function distance(a: Pick<T, K>, b: Pick<T, K>): number {
+        return Math.sqrt(
+          features.reduce((sum, feature) => {
+            const diff = Number(a[feature]) - Number(b[feature])
+            return sum + diff * diff
+          }, 0),
+        )
+      }
+
+      // Get k nearest neighbors
+      const neighbors = this.items
+        .map(item => ({
+          item,
+          distance: distance(point, item as Pick<T, K>),
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, k)
+        .map(n => n.item)
+
+      return collect(neighbors)
+    },
+
+    naiveBayes<K extends keyof T>(
+      features: K[],
+      label: K,
+    ): (item: Pick<T, K>) => T[K] {
+      // Calculate prior probabilities and feature probabilities
+      const classes = new Set(this.pluck(label).toArray())
+      const priors = new Map<T[K], number>()
+      const conditionals = new Map<T[K], Map<K, Map<T[K], number>>>()
+
+      for (const cls of classes) {
+        const classItems = this.where(label, cls)
+        priors.set(cls, classItems.count() / this.count())
+
+        conditionals.set(cls, new Map())
+        for (const feature of features) {
+          const featureProbs = new Map<T[K], number>()
+          const featureValues = new Set(classItems.pluck(feature).toArray())
+
+          for (const value of featureValues) {
+            const count = classItems.where(feature, value).count()
+            featureProbs.set(value, count / classItems.count())
+          }
+
+          conditionals.get(cls)!.set(feature, featureProbs)
+        }
+      }
+
+      // Return classifier function
+      return (item: Pick<T, K>): T[K] => {
+        let maxProb = -Infinity
+        let predicted: T[K] = Array.from(classes)[0]
+
+        for (const cls of classes) {
+          let prob = Math.log(priors.get(cls) || 0)
+
+          for (const feature of features) {
+            const value = item[feature]
+            const featureProb = conditionals.get(cls)?.get(feature)?.get(value) || 0.0001 // Laplace smoothing
+            prob += Math.log(featureProb)
+          }
+
+          if (prob > maxProb) {
+            maxProb = prob
+            predicted = cls
+          }
+        }
+
+        return predicted
+      }
+    },
+
+    detectAnomalies(options: AnomalyDetectionOptions<T>): CollectionOperations<T> {
+      const { method = 'zscore', threshold = 2, features = [] } = options
+
+      switch (method) {
+        case 'zscore': {
+          const featureKeys = features.length > 0
+            ? features
+            : (Object.keys(this.first() || {}) as Array<keyof T>)
+
+          return this.filter((item) => {
+            for (const key of featureKeys) {
+              const values = this.pluck(key).toArray().map(Number)
+              const mean = values.reduce((a, b) => a + b, 0) / values.length
+              const std = Math.sqrt(
+                values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length,
+              )
+
+              const zscore = Math.abs((Number(item[key]) - mean) / std)
+              if (zscore > threshold)
+                return true
+            }
+            return false
+          })
+        }
+
+        case 'iqr': {
+          const featureKeys = features.length > 0
+            ? features
+            : (Object.keys(this.first() || {}) as Array<keyof T>)
+
+          return this.filter((item) => {
+            for (const key of featureKeys) {
+              const values = this.pluck(key).toArray().map(Number).sort((a, b) => a - b)
+              const q1 = values[Math.floor(values.length * 0.25)]
+              const q3 = values[Math.floor(values.length * 0.75)]
+              const iqr = q3 - q1
+
+              const value = Number(item[key])
+              if (value < q1 - threshold * iqr || value > q3 + threshold * iqr) {
+                return true
+              }
+            }
+            return false
+          })
+        }
+
+        case 'isolationForest': {
+          const maxSamples = Math.min(256, this.count())
+          const maxDepth = Math.ceil(Math.log2(maxSamples))
+
+          function randomSplit<K extends keyof T>(items: T[], feature: K, depth: number): number {
+            if (depth >= maxDepth || items.length <= 1)
+              return depth
+
+            const values = items.map(item => Number(item[feature]))
+            const min = Math.min(...values)
+            const max = Math.max(...values)
+            const splitValue = min + Math.random() * (max - min)
+
+            const left = items.filter(item => Number(item[feature]) < splitValue)
+            const right = items.filter(item => Number(item[feature]) >= splitValue)
+
+            return Math.max(
+              randomSplit(left, feature, depth + 1),
+              randomSplit(right, feature, depth + 1),
+            )
+          }
+
+          const featureKeys = features.length > 0
+            ? features
+            : (Object.keys(this.first() || {}) as Array<keyof T>)
+
+          return this.filter((item) => {
+            const score = featureKeys.reduce((acc, feature) => {
+              // Now feature is properly typed as keyof T
+              const depth = randomSplit([item], feature, 0)
+              return acc + depth
+            }, 0) / featureKeys.length
+
+            return score < threshold
+          })
+        }
+      }
     },
   }
 }

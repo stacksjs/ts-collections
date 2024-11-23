@@ -117,10 +117,10 @@ export interface RegressionResult {
 //   timeliness: number
 // }
 
-export interface AnomalyDetectionOptions {
+export interface AnomalyDetectionOptions<T> {
   method: 'zscore' | 'iqr' | 'isolationForest'
   threshold?: number
-  features?: string[]
+  features?: Array<keyof T>
 }
 
 /**
@@ -134,6 +134,16 @@ export interface VersionInfo<T> {
     item: T
     previousItem?: T
   }>
+}
+
+export interface VersionStore<T> {
+  currentVersion: number
+  snapshots: Map<number, {
+    items: T[]
+    timestamp: Date
+    metadata?: Record<string, any>
+  }>
+  changes: VersionInfo<T>[]
 }
 
 /**
@@ -394,16 +404,24 @@ export interface CollectionOperations<T> extends Collection<T> {
 
   // Data Quality & Cleaning
   // dataQuality: () => DataQualityMetrics
-  detectAnomalies: (options: AnomalyDetectionOptions) => CollectionOperations<T>
+  detectAnomalies: (options: AnomalyDetectionOptions<T>) => CollectionOperations<T>
   impute: <K extends keyof T>(key: K, strategy: 'mean' | 'median' | 'mode') => CollectionOperations<T>
   normalize: <K extends keyof T>(key: K, method: 'minmax' | 'zscore') => CollectionOperations<T>
   removeOutliers: <K extends keyof T>(key: K, threshold?: number) => CollectionOperations<T>
 
   // Versioning & History
-  snapshot: () => void
-  revert: (version: number) => CollectionOperations<T>
-  history: () => CollectionOperations<VersionInfo<T>>
   diff: (version1: number, version2: number) => CollectionOperations<VersionInfo<T>>
+  diffSummary: (version1: number, version2: number) => {
+    added: number
+    removed: number
+    updated: number
+    changes: Array<{
+      type: 'add' | 'update' | 'delete'
+      field?: keyof T
+      oldValue?: any
+      newValue?: any
+    }>
+  }
   setDiff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
 
   // Advanced Querying & Search
