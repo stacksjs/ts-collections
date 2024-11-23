@@ -1619,6 +1619,18 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         timeliness: 1, // Would need timestamp analysis
       }
     },
+
+    lazy(): LazyCollectionOperations<T> {
+      // Create a generator function for the current collection
+      async function* collectionGenerator(items: T[]): AsyncGenerator<T, void, unknown> {
+        for (const item of items) {
+          yield item
+        }
+      }
+
+      // Initialize lazy operations with the current collection's items
+      return createLazyOperations(collectionGenerator(collection.items))
+    },
   }
 }
 
@@ -1630,7 +1642,7 @@ function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOpe
   let cached: T[] | null = null
   let batchSize: number | null = null
 
-  async function* executeChain(): AsyncGenerator<T, void, unknown> {
+  async function* executeChain(): AsyncGenerator<T, void, undefined> {
     if (cached) {
       for (const item of cached) {
         yield item
@@ -1638,7 +1650,6 @@ function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOpe
       return
     }
 
-    let index = 0
     let batch: T[] = []
 
     for await (let value of generator) {
@@ -1653,7 +1664,9 @@ function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOpe
         if (batchSize) {
           batch.push(value)
           if (batch.length >= batchSize) {
-            yield * batch
+            for (const item of batch) {
+              yield item
+            }
             batch = []
           }
         }
@@ -1661,30 +1674,32 @@ function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOpe
           yield value
         }
       }
-      index++
     }
 
+    // Yield any remaining batch items
     if (batch.length > 0) {
-      yield * batch
+      for (const item of batch) {
+        yield item
+      }
     }
   }
 
   return {
     map<U>(callback: (item: T, index: number) => U): LazyCollectionOperations<U> {
-      let index = 0
-      operations.push((value: T) => callback(value, index++))
+      let currentIndex = 0
+      operations.push((value: T) => callback(value, currentIndex++))
       return createLazyOperations(executeChain() as any)
     },
 
     filter(predicate: (item: T, index: number) => boolean): LazyCollectionOperations<T> {
-      let index = 0
-      operations.push((value: T) => predicate(value, index++) ? value : undefined)
+      let currentIndex = 0
+      operations.push((value: T) => predicate(value, currentIndex++) ? value : undefined)
       return createLazyOperations(executeChain())
     },
 
     flatMap<U>(callback: (item: T, index: number) => U[]): LazyCollectionOperations<U> {
-      let index = 0
-      operations.push((value: T) => callback(value, index++))
+      let currentIndex = 0
+      operations.push((value: T) => callback(value, currentIndex++))
       return createLazyOperations(executeChain() as any)
     },
 
@@ -1745,34 +1760,33 @@ function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOpe
     },
 
     async count(): Promise<number> {
-      let count = 0
-      for await (const _ of executeChain()) {
-        count++
+      let counter = 0
+      for await (const _item of executeChain()) {
+        counter++
       }
-      return count
+      return counter
     },
 
     async first(): Promise<T | undefined> {
-      for await (const item of executeChain()) {
-        return item
-      }
-      return undefined
+      const iterator = executeChain()
+      const result = await iterator.next()
+      return result.done ? undefined : result.value
     },
 
     async last(): Promise<T | undefined> {
-      let last: T | undefined
+      let lastItem: T | undefined
       for await (const item of executeChain()) {
-        last = item
+        lastItem = item
       }
-      return last
+      return lastItem
     },
 
     async nth(n: number): Promise<T | undefined> {
-      let index = 0
+      let currentIndex = 0
       for await (const item of executeChain()) {
-        if (index === n)
+        if (currentIndex === n)
           return item
-        index++
+        currentIndex++
       }
       return undefined
     },
@@ -1798,8 +1812,9 @@ function createLazyOperations<T>(generator: LazyGenerator<T>): LazyCollectionOpe
 /**
  * Helper function to create an empty collection
  */
-export function emptyCollection<T>(): CollectionOperations<T> {
-  return collect([])
+export function emptyCollection<T extends Record<string, unknown>>(): CollectionOperations<T> {
+  const empty: T[] = []
+  return collect(empty)
 }
 
 /**
@@ -1895,6 +1910,7 @@ export const ValidationRules = {
   url: (): ValidationRule<string> =>
     (value: string) => {
       try {
+        // eslint-disable-next-line no-new
         new URL(value)
         return true
       }
