@@ -1061,25 +1061,212 @@ describe('Collection Sorting Methods', () => {
   })
 })
 
-// describe('Collection Set Operations', () => {
-//   describe('unique()', () => {
-//     it('should remove duplicates', () => expect(true).toBe(true))
-//     it('should remove duplicates by key', () => expect(true).toBe(true))
-//     it('should handle empty collection', () => expect(true).toBe(true))
-//   })
+describe('Collection Set Operations', () => {
+  describe('unique()', () => {
+    it('should remove duplicates from primitive values', () => {
+      const numbers = collect([1, 2, 2, 3, 3, 3, 4, 4, 4, 4])
+      expect(numbers.unique().toArray()).toEqual([1, 2, 3, 4])
 
-//   describe('intersect()', () => {
-//     it('should find common elements', () => expect(true).toBe(true))
-//     it('should work with array input', () => expect(true).toBe(true))
-//     it('should handle empty input', () => expect(true).toBe(true))
-//   })
+      const strings = collect(['a', 'b', 'b', 'c', 'c', 'c'])
+      expect(strings.unique().toArray()).toEqual(['a', 'b', 'c'])
 
-//   describe('union()', () => {
-//     it('should combine unique elements', () => expect(true).toBe(true))
-//     it('should work with array input', () => expect(true).toBe(true))
-//     it('should handle empty input', () => expect(true).toBe(true))
-//   })
-// })
+      const mixed = collect([true, 1, 'a', true, 2, 'a', false, 1, 'b'])
+      expect(mixed.unique().toArray()).toEqual([true, 1, 'a', 2, false, 'b'])
+    })
+
+    it('should remove duplicates by key from objects', () => {
+      const users = collect([
+        { id: 1, name: 'John', role: 'admin' },
+        { id: 2, name: 'Jane', role: 'user' },
+        { id: 3, name: 'John', role: 'editor' },
+        { id: 4, name: 'Bob', role: 'user' },
+        { id: 5, name: 'John', role: 'user' },
+      ])
+
+      const uniqueByName = users.unique('name')
+      expect(uniqueByName.count()).toBe(3)
+      expect(uniqueByName.pluck('name').toArray()).toEqual(['John', 'Jane', 'Bob'])
+
+      const uniqueByRole = users.unique('role')
+      expect(uniqueByRole.count()).toBe(3)
+      expect(uniqueByRole.pluck('role').sort().toArray()).toEqual(['admin', 'editor', 'user'])
+    })
+
+    it('should handle edge cases', () => {
+      // Empty collection
+      expect(collect<number>([]).unique().toArray()).toEqual([])
+
+      // Collection with null/undefined values
+      const withNulls = collect([null, undefined, null, 1, undefined, 2, null])
+      expect(withNulls.unique().toArray()).toEqual([null, undefined, 1, 2])
+
+      // Objects with null/undefined/missing properties
+      const objects = collect([
+        { id: 1, value: null },
+        { id: 2, value: undefined },
+        { id: 3 },
+        { id: 4, value: null },
+        { id: 5 },
+      ])
+      expect(objects.unique('value').count()).toBe(2)
+    })
+
+    it('should preserve object references', () => {
+      const obj1 = { id: 1, data: { value: 'test' } }
+      const obj2 = { id: 2, data: { value: 'test' } }
+      const collection = collect([obj1, obj1, obj2, obj2])
+
+      const unique = collection.unique()
+      expect(unique.count()).toBe(2)
+      expect(unique.first()).toBe(obj1)
+    })
+
+    interface NestedUser {
+      user: {
+        id: number
+        name: string
+      }
+    }
+
+    it('should handle nested objects', () => {
+      const item1 = { user: { id: 1, name: 'John' } }
+      const item2 = { user: { id: 2, name: 'Jane' } }
+      const item3 = { user: { id: 1, name: 'John' } }
+      const item4 = { user: { id: 3, name: 'John' } }
+
+      const items = collect<NestedUser>([item1, item2, item3, item4])
+
+      expect(items.unique('user').count()).toBe(4) // Since objects are compared by reference
+    })
+  })
+
+  describe('intersect()', () => {
+    it('should find common elements between collections', () => {
+      const collection1 = collect([1, 2, 3, 4, 5])
+      const collection2 = collect([4, 5, 6, 7, 8])
+
+      expect(collection1.intersect(collection2).toArray()).toEqual([4, 5])
+    })
+
+    it('should work with array input', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const array = [4, 5, 6, 7, 8]
+
+      expect(collection.intersect(array).toArray()).toEqual([4, 5])
+    })
+
+    interface User {
+      id: number
+      name: string
+    }
+
+    it('should handle complex objects', () => {
+      const users1 = collect<User>([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+        { id: 3, name: 'Bob' },
+      ])
+
+      const users2 = collect<User>([
+        { id: 2, name: 'Jane' },
+        { id: 3, name: 'Bob' },
+        { id: 4, name: 'Alice' },
+      ])
+
+      const intersection = users1.intersect(users2)
+      expect(intersection.count()).toBe(0) // Objects are compared by reference
+    })
+
+    it('should handle edge cases', () => {
+      const collection = collect([1, 2, 3, null, undefined])
+
+      // Empty collections
+      expect(collect<number>([]).intersect([] as number[]).toArray()).toEqual([])
+      expect(collect<number>([1, 2, 3]).intersect([] as number[]).toArray()).toEqual([])
+
+      // Null/undefined values
+      expect(collection.intersect([null, undefined, 4]).toArray())
+        .toEqual([null, undefined])
+
+      // Single element
+      expect(collect([1]).intersect([1]).toArray()).toEqual([1])
+
+      // No common elements
+      expect(collect([1, 2, 3]).intersect([4, 5, 6]).toArray()).toEqual([])
+    })
+
+    it('should maintain value types', () => {
+      const collection = collect([1, '1', true, 'true'])
+      const intersection = collection.intersect(['1', true])
+      expect(intersection.toArray()).toEqual(['1', true])
+    })
+  })
+
+  describe('union()', () => {
+    it('should combine unique elements from both collections', () => {
+      const collection1 = collect([1, 2, 3])
+      const collection2 = collect([3, 4, 5])
+
+      expect(collection1.union(collection2).toArray()).toEqual([1, 2, 3, 4, 5])
+    })
+
+    it('should work with array input', () => {
+      const collection = collect([1, 2, 3])
+      const arr: number[] = [3, 4, 5]
+      expect(collection.union(arr).toArray()).toEqual([1, 2, 3, 4, 5])
+    })
+
+    it('should maintain order and handle duplicates', () => {
+      const collection = collect([3, 1, 2, 3])
+      const arr: number[] = [4, 2, 5, 4]
+      const result = collection.union(arr)
+      expect(result.toArray()).toEqual([3, 1, 2, 4, 5])
+    })
+
+    interface User {
+      id: number
+      name: string
+    }
+
+    it('should handle complex objects by reference', () => {
+      const user1 = { id: 1, name: 'John' }
+      const user2 = { id: 2, name: 'Jane' }
+      const user3 = { id: 3, name: 'Bob' }
+
+      const users1 = collect<User>([user1, user2])
+      const users2: User[] = [user2, user3]
+
+      const union = users1.union(users2)
+      expect(union.count()).toBe(3) // user2 is the same reference in both collections
+    })
+
+    it('should handle edge cases', () => {
+      const collection = collect([1, 2, null, undefined])
+
+      // Empty collections
+      expect(collect<number>([]).union([1, 2, 3] as number[]).toArray()).toEqual([1, 2, 3])
+      expect(collection.union([] as Array<number | null | undefined>).toArray()).toEqual([1, 2, null, undefined])
+
+      // Null/undefined values
+      expect(collection.union([null, undefined, 3]).toArray())
+        .toEqual([1, 2, null, undefined, 3])
+
+      // Single element
+      expect(collect([1]).union([2]).toArray()).toEqual([1, 2])
+
+      // All duplicates
+      expect(collect([1, 1, 1]).union([1, 1, 1]).toArray()).toEqual([1])
+    })
+
+    it('should preserve value types and handle object references', () => {
+      const obj = { id: 1 }
+      const collection = collect([obj, 1, '1'])
+      const union = collection.union([{ id: 1 }, 1, '1'])
+
+      expect(union.count()).toBe(4) // Different object reference is preserved
+    })
+  })
+})
 
 // describe('Collection Utility Methods', () => {
 //   describe('tap()', () => {
