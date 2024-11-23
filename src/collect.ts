@@ -335,10 +335,10 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
         // Handles undefined/null values
         if (aVal === undefined || aVal === null) {
-          return direction === 'asc' ? -1 : 1;
+          return direction === 'asc' ? -1 : 1
         }
         if (bVal === undefined || bVal === null) {
-          return direction === 'asc' ? 1 : -1;
+          return direction === 'asc' ? 1 : -1
         }
 
         // Sort numbers numerically
@@ -806,7 +806,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           : Number(numValue)
 
         return { date, value }
-      })
+      }).filter(point => !Number.isNaN(point.date.getTime())) // Filter out invalid dates
 
       // Sort points by date
       const sorted = points.sort((a, b) => a.date.getTime() - b.date.getTime())
@@ -841,9 +841,26 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(result)
     },
 
-    movingAverage({ window, centered = false }: MovingAverageOptions) {
-      if (window < 1 || window > collection.length) {
+    movingAverage({ window, centered = false }: MovingAverageOptions): CollectionOperations<number> {
+      // Handle empty collection first
+      if (collection.length === 0) {
+        return collect<number>([])
+      }
+
+      // Handle invalid window size
+      if (window < 1) {
         throw new Error('Invalid window size')
+      }
+
+      // Handle window size larger than collection length
+      if (window > collection.length) {
+        throw new Error('Invalid window size')
+      }
+
+      // If window size equals collection length, return the overall average
+      if (window === collection.length) {
+        const avg = collection.items.reduce((a, b) => Number(a) + Number(b), 0) / window
+        return collect<number>([avg])
       }
 
       const values = collection.items.map(item => Number(item))
@@ -855,7 +872,25 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         result[i + offset] = sum / window
       }
 
-      return collect(result)
+      // Fill in missing values at the edges when using centered moving average
+      if (centered) {
+        // Fill start values
+        const startOffset = Math.floor(window / 2)
+        for (let i = 0; i < startOffset; i++) {
+          const slice = values.slice(0, window)
+          result[i] = slice.reduce((a, b) => a + b, 0) / slice.length
+        }
+
+        // Fill end values
+        const endOffset = Math.ceil(window / 2) - 1
+        for (let i = 0; i < endOffset; i++) {
+          const idx = values.length - endOffset + i
+          const slice = values.slice(-window)
+          result[idx] = slice.reduce((a, b) => a + b, 0) / slice.length
+        }
+      }
+
+      return collect<number>(result)
     },
 
     async validate(schema: ValidationSchema<T>): Promise<ValidationResult> {
