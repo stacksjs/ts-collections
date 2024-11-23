@@ -634,526 +634,736 @@ describe('Collection Grouping Operations', () => {
 })
 
 describe('Collection Filtering Methods', () => {
+  // Test data interfaces
+  interface User {
+    id: number
+    name: string
+    age: number | null
+    role: string
+    metadata?: {
+      lastLogin?: string
+      score?: number
+    }
+  }
+
+  interface Product {
+    id: number
+    name: string
+    price: number
+    stock: number
+    categories: string[]
+  }
+
   describe('where()', () => {
-    it('should filter by key-value pair', () => expect(true).toBe(true))
-    it('should handle non-existent key', () => expect(true).toBe(true))
+    it('should filter by key-value pair', () => {
+      const users = collect([
+        { id: 1, name: 'John', age: 25, role: 'admin' },
+        { id: 2, name: 'Jane', age: 30, role: 'user' },
+        { id: 3, name: 'Bob', age: 25, role: 'user' },
+        { id: 4, name: 'Alice', age: 35, role: 'admin' },
+      ])
+
+      // Test with string value
+      const admins = users.where('role', 'admin')
+      expect(admins.count()).toBe(2)
+      expect(admins.pluck('name').toArray()).toEqual(['John', 'Alice'])
+
+      // Test with number value
+      const age25 = users.where('age', 25)
+      expect(age25.count()).toBe(2)
+      expect(age25.pluck('name').toArray()).toEqual(['John', 'Bob'])
+
+      // Test with objects (without nested property access)
+      const usersWithMeta = collect([
+        { id: 1, name: 'John', score: 100 },
+        { id: 2, name: 'Jane', score: 85 },
+        { id: 3, name: 'Bob', score: 100 },
+      ])
+
+      const highScore = usersWithMeta.where('score', 100)
+      expect(highScore.count()).toBe(2)
+      expect(highScore.pluck('name').toArray()).toEqual(['John', 'Bob'])
+    })
+
+    it('should handle non-existent key', () => {
+      const users = collect([
+        { id: 1, name: 'John', age: 25, role: 'admin' },
+        { id: 2, name: 'Jane', age: 30, role: 'user' },
+      ])
+
+      // Test with non-existent key
+      const result = users.where('nonexistent' as any, 'value')
+      expect(result.isEmpty()).toBe(true)
+    })
+
+    it('should handle edge cases', () => {
+      interface User {
+        id: number
+        name: string
+        age: number | null
+        role: string
+      }
+
+      const users = collect<User>([
+        { id: 1, name: 'John', age: null, role: 'admin' },
+        { id: 2, name: 'Jane', age: 30, role: 'user' },
+        { id: 3, name: 'Bob', age: 0, role: 'user' },
+        { id: 4, name: '', role: 'admin', age: 25 },
+      ])
+
+      // Test with null value
+      const nullAge = users.where('age', null)
+      const nullUser = nullAge.first()
+      expect(nullUser?.name).toBe('John')
+
+      // Test with zero value
+      const zeroAge = users.where('age', 0)
+      const zeroUser = zeroAge.first()
+      expect(zeroUser?.name).toBe('Bob')
+
+      // Test with empty string
+      const emptyName = users.where('name', '')
+      const emptyUser = emptyName.first()
+      expect(emptyUser?.id).toBe(4)
+
+      // Additional type-safe tests
+      const adminRole = users.where('role', 'admin').first()
+      const adminName = users.where('role', 'admin').first('name')
+      expect(adminRole?.name).toBe('John')
+      expect(adminName).toBe('John')
+    })
   })
 
   describe('whereIn()', () => {
-    it('should filter by value list', () => expect(true).toBe(true))
-    it('should handle empty value list', () => expect(true).toBe(true))
+    it('should filter by value list', () => {
+      const products = collect([
+        { id: 1, name: 'Apple', price: 0.5, stock: 100, category: 'fruit' },
+        { id: 2, name: 'Banana', price: 0.3, stock: 150, category: 'fruit' },
+        { id: 3, name: 'Carrot', price: 0.4, stock: 80, category: 'vegetable' },
+        { id: 4, name: 'Donut', price: 1.0, stock: 50, category: 'bakery' },
+      ])
+
+      // Test with numbers
+      const selectedIds = products.whereIn('id', [1, 3])
+      expect(selectedIds.count()).toBe(2)
+      expect(selectedIds.pluck('name').toArray()).toEqual(['Apple', 'Carrot'])
+
+      // Test with strings
+      const selectedNames = products.whereIn('name', ['Apple', 'Banana', 'NonExistent'])
+      expect(selectedNames.count()).toBe(2)
+      expect(selectedNames.pluck('price').toArray()).toEqual([0.5, 0.3])
+
+      // Test with categories
+      const fruitAndBakery = products.whereIn('category', ['fruit', 'bakery'])
+      expect(fruitAndBakery.count()).toBe(3)
+      expect(fruitAndBakery.pluck('name').toArray()).toEqual(['Apple', 'Banana', 'Donut'])
+    })
+
+    it('should handle empty value list', () => {
+      const products = collect([
+        { id: 1, name: 'Apple', price: 0.5, stock: 100, category: 'fruit' },
+        { id: 2, name: 'Banana', price: 0.3, stock: 150, category: 'fruit' },
+      ])
+
+      // Test with empty array
+      const emptyResult = products.whereIn('id', [])
+      expect(emptyResult.isEmpty()).toBe(true)
+    })
+
+    it('should handle edge cases', () => {
+      const users = collect([
+        { id: 1, name: 'John', age: null, role: 'admin' },
+        { id: 2, name: 'Jane', age: 30, role: 'user' },
+        { id: 3, name: 'Bob', age: 0, role: 'user' },
+        { id: 4, name: '', role: 'admin', age: 25 },
+      ])
+
+      // Test with null values in list
+      const withNull = users.whereIn('age', [null, 30])
+      expect(withNull.count()).toBe(2)
+      expect(withNull.pluck('name').toArray()).toEqual(['John', 'Jane'])
+
+      // Test with zero in list
+      const withZero = users.whereIn('age', [0, 25])
+      expect(withZero.count()).toBe(2)
+      expect(withZero.pluck('name').toArray()).toEqual(['Bob', ''])
+
+      // Test with empty string in list
+      const withEmpty = users.whereIn('name', ['', 'John'])
+      expect(withEmpty.count()).toBe(2)
+    })
   })
 
   describe('whereBetween()', () => {
-    it('should filter values within range', () => expect(true).toBe(true))
-    it('should include boundary values', () => expect(true).toBe(true))
+    it('should filter values within range', () => {
+      const products = collect<Product>([
+        { id: 1, name: 'Apple', price: 0.5, stock: 100, categories: ['fruit'] },
+        { id: 2, name: 'Banana', price: 0.3, stock: 150, categories: ['fruit'] },
+        { id: 3, name: 'Carrot', price: 0.4, stock: 80, categories: ['vegetable'] },
+        { id: 4, name: 'Donut', price: 1.0, stock: 50, categories: ['bakery'] },
+      ])
+
+      // Test with integers
+      const stockBetween = products.whereBetween('stock', 75, 125)
+      expect(stockBetween.count()).toBe(2)
+      expect(stockBetween.pluck('name').toArray()).toEqual(['Apple', 'Carrot'])
+
+      // Test with decimals
+      const priceBetween = products.whereBetween('price', 0.3, 0.5)
+      expect(priceBetween.count()).toBe(3)
+      expect(priceBetween.pluck('name').toArray()).toEqual(['Apple', 'Banana', 'Carrot'])
+    })
+
+    it('should include boundary values', () => {
+      const users = collect<User>([
+        { id: 1, name: 'John', age: 20, role: 'user' },
+        { id: 2, name: 'Jane', age: 25, role: 'user' },
+        { id: 3, name: 'Bob', age: 30, role: 'user' },
+        { id: 4, name: 'Alice', age: 35, role: 'user' },
+      ])
+
+      // Test inclusive boundaries
+      const ageBetween = users.whereBetween('age', 25, 30)
+      expect(ageBetween.count()).toBe(2)
+      expect(ageBetween.pluck('name').toArray()).toEqual(['Jane', 'Bob'])
+    })
+
+    it('should handle edge cases', () => {
+      const products = collect<Product>([
+        { id: 1, name: 'A', price: 0, stock: 100, categories: ['fruit'] },
+        { id: 2, name: 'B', price: -1, stock: 150, categories: ['fruit'] },
+        { id: 3, name: 'C', price: 1, stock: 80, categories: ['vegetable'] },
+      ])
+
+      // Test with zero boundary
+      const priceAroundZero = products.whereBetween('price', -1, 0)
+      expect(priceAroundZero.count()).toBe(2)
+
+      // Test with same min and max
+      const exactPrice = products.whereBetween('price', 1, 1)
+      expect(exactPrice.count()).toBe(1)
+      expect(exactPrice.first()?.name).toBe('C')
+
+      // Test with inverted range
+      const invertedRange = products.whereBetween('price', 1, -1)
+      expect(invertedRange.isEmpty()).toBe(true)
+    })
+
+    it('should handle floating point precision', () => {
+      const items = collect([
+        { value: 0.1 + 0.2 }, // JavaScript floating point fun: 0.30000000000000004
+        { value: 0.3 },
+        { value: 0.4 },
+      ])
+
+      const between = items.whereBetween('value', 0.3, 0.35)
+      expect(between.count()).toBe(2) // Should include both 0.30000000000000004 and 0.3
+    })
   })
 })
 
-describe('Collection Sorting Methods', () => {
-  describe('sort()', () => {
-    it('should sort with compare function', () => expect(true).toBe(true))
-    it('should sort numbers by default', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
-  })
-
-  describe('sortBy()', () => {
-    it('should sort by key ascending', () => expect(true).toBe(true))
-    it('should sort by key descending', () => expect(true).toBe(true))
-    it('should handle non-existent key', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Set Operations', () => {
-  describe('unique()', () => {
-    it('should remove duplicates', () => expect(true).toBe(true))
-    it('should remove duplicates by key', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
-  })
-
-  describe('intersect()', () => {
-    it('should find common elements', () => expect(true).toBe(true))
-    it('should work with array input', () => expect(true).toBe(true))
-    it('should handle empty input', () => expect(true).toBe(true))
-  })
-
-  describe('union()', () => {
-    it('should combine unique elements', () => expect(true).toBe(true))
-    it('should work with array input', () => expect(true).toBe(true))
-    it('should handle empty input', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Utility Methods', () => {
-  describe('tap()', () => {
-    it('should execute callback and return collection', () => expect(true).toBe(true))
-    it('should not modify collection', () => expect(true).toBe(true))
-  })
-
-  describe('pipe()', () => {
-    it('should transform collection with callback', () => expect(true).toBe(true))
-    it('should handle complex transformations', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Async Operations', () => {
-  describe('mapAsync()', () => {
-    it('should transform items asynchronously', () => expect(true).toBe(true))
-    it('should maintain order', () => expect(true).toBe(true))
-    it('should handle rejections', () => expect(true).toBe(true))
-  })
-
-  describe('filterAsync()', () => {
-    it('should filter items asynchronously', () => expect(true).toBe(true))
-    it('should handle async predicates', () => expect(true).toBe(true))
-    it('should handle rejections', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Advanced Features', () => {
-  describe('timeSeries()', () => {
-    it('should create time series data', () => expect(true).toBe(true))
-    it('should fill gaps correctly', () => expect(true).toBe(true))
-    it('should handle different intervals', () => expect(true).toBe(true))
-  })
-
-  describe('movingAverage()', () => {
-    it('should calculate moving average', () => expect(true).toBe(true))
-    it('should handle different window sizes', () => expect(true).toBe(true))
-    it('should support centered option', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection ML Operations', () => {
-  describe('kmeans()', () => {
-    it('should cluster data points', () => expect(true).toBe(true))
-    it('should handle different distance metrics', () => expect(true).toBe(true))
-    it('should respect max iterations', () => expect(true).toBe(true))
-  })
-
-  describe('linearRegression()', () => {
-    it('should calculate regression coefficients', () => expect(true).toBe(true))
-    it('should calculate R-squared', () => expect(true).toBe(true))
-    it('should handle multiple independents', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Serialization', () => {
-  describe('toJSON()', () => {
-    it('should serialize to JSON string', () => expect(true).toBe(true))
-    it('should handle circular references', () => expect(true).toBe(true))
-    it('should respect serialization options', () => expect(true).toBe(true))
-  })
-
-  describe('toCsv()', () => {
-    it('should convert to CSV format', () => expect(true).toBe(true))
-    it('should handle nested objects', () => expect(true).toBe(true))
-    it('should escape special characters', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Performance Features', () => {
-  describe('cache()', () => {
-    it('should cache results', () => expect(true).toBe(true))
-    it('should respect TTL', () => expect(true).toBe(true))
-    it('should handle cache invalidation', () => expect(true).toBe(true))
-  })
-
-  describe('lazy()', () => {
-    it('should create lazy collection', () => expect(true).toBe(true))
-    it('should defer execution', () => expect(true).toBe(true))
-    it('should support chaining', () => expect(true).toBe(true))
-  })
-})
-
-// Previous test cases remain, adding all missing ones...
-
-describe('Advanced Transformations', () => {
-  describe('mapToGroups()', () => {
-    it('should map items to groups', () => expect(true).toBe(true))
-    it('should handle complex group mappings', () => expect(true).toBe(true))
-  })
-
-  describe('mapSpread()', () => {
-    it('should spread arguments to callback', () => expect(true).toBe(true))
-    it('should handle arrays and objects', () => expect(true).toBe(true))
-  })
-
-  describe('mapUntil()', () => {
-    it('should map until predicate is true', () => expect(true).toBe(true))
-    it('should handle early termination', () => expect(true).toBe(true))
-  })
-
-  describe('mapOption()', () => {
-    it('should filter out null/undefined values', () => expect(true).toBe(true))
-    it('should transform remaining values', () => expect(true).toBe(true))
-  })
-})
-
-describe('String Operations', () => {
-  describe('join()', () => {
-    it('should join string collections', () => expect(true).toBe(true))
-    it('should use custom separator', () => expect(true).toBe(true))
-  })
-
-  describe('implode()', () => {
-    it('should join by key', () => expect(true).toBe(true))
-    it('should use custom separator', () => expect(true).toBe(true))
-  })
-
-  describe('lower()', () => {
-    it('should convert to lowercase', () => expect(true).toBe(true))
-  })
-
-  describe('upper()', () => {
-    it('should convert to uppercase', () => expect(true).toBe(true))
-  })
-
-  describe('slug()', () => {
-    it('should create URL-friendly slug', () => expect(true).toBe(true))
-    it('should handle special characters', () => expect(true).toBe(true))
-  })
-})
-
-describe('Set Operations', () => {
-  describe('symmetricDiff()', () => {
-    it('should find symmetric difference', () => expect(true).toBe(true))
-    it('should work with collections and arrays', () => expect(true).toBe(true))
-  })
-
-  describe('cartesianProduct()', () => {
-    it('should compute cartesian product', () => expect(true).toBe(true))
-    it('should handle empty collections', () => expect(true).toBe(true))
-  })
-
-  describe('power()', () => {
-    it('should compute power set', () => expect(true).toBe(true))
-    it('should include empty set', () => expect(true).toBe(true))
-  })
-})
-
-describe('Advanced Math Operations', () => {
-  describe('zscore()', () => {
-    it('should calculate z-scores', () => expect(true).toBe(true))
-    it('should handle key parameter', () => expect(true).toBe(true))
-  })
-
-  describe('kurtosis()', () => {
-    it('should calculate kurtosis', () => expect(true).toBe(true))
-    it('should handle key parameter', () => expect(true).toBe(true))
-  })
-
-  describe('skewness()', () => {
-    it('should calculate skewness', () => expect(true).toBe(true))
-    it('should handle key parameter', () => expect(true).toBe(true))
-  })
-
-  describe('covariance()', () => {
-    it('should calculate covariance', () => expect(true).toBe(true))
-    it('should handle different keys', () => expect(true).toBe(true))
-  })
-
-  describe('entropy()', () => {
-    it('should calculate entropy', () => expect(true).toBe(true))
-    it('should handle key parameter', () => expect(true).toBe(true))
-  })
-
-  describe('fft()', () => {
-    it('should compute FFT for number collections', () => expect(true).toBe(true))
-    it('should throw for non-number collections', () => expect(true).toBe(true))
-  })
-
-  describe('interpolate()', () => {
-    it('should interpolate values', () => expect(true).toBe(true))
-    it('should handle different point counts', () => expect(true).toBe(true))
-  })
-
-  describe('convolve()', () => {
-    it('should convolve with kernel', () => expect(true).toBe(true))
-    it('should handle different kernel sizes', () => expect(true).toBe(true))
-  })
-
-  describe('differentiate()', () => {
-    it('should compute derivative', () => expect(true).toBe(true))
-    it('should handle numeric collections', () => expect(true).toBe(true))
-  })
-
-  describe('integrate()', () => {
-    it('should compute integral', () => expect(true).toBe(true))
-    it('should handle numeric collections', () => expect(true).toBe(true))
-  })
-})
-
-describe('Text Analysis', () => {
-  describe('sentiment()', () => {
-    it('should analyze sentiment', () => expect(true).toBe(true))
-    it('should calculate comparative score', () => expect(true).toBe(true))
-  })
-
-  describe('wordFrequency()', () => {
-    it('should count word occurrences', () => expect(true).toBe(true))
-    it('should handle case sensitivity', () => expect(true).toBe(true))
-  })
-
-  describe('ngrams()', () => {
-    it('should generate n-grams', () => expect(true).toBe(true))
-    it('should handle different n values', () => expect(true).toBe(true))
-  })
-})
-
-describe('Data Quality Operations', () => {
-  describe('detectAnomalies()', () => {
-    it('should detect using z-score method', () => expect(true).toBe(true))
-    it('should detect using IQR method', () => expect(true).toBe(true))
-    it('should detect using isolation forest', () => expect(true).toBe(true))
-  })
-
-  describe('impute()', () => {
-    it('should impute using mean', () => expect(true).toBe(true))
-    it('should impute using median', () => expect(true).toBe(true))
-    it('should impute using mode', () => expect(true).toBe(true))
-  })
-
-  describe('normalize()', () => {
-    it('should normalize using min-max', () => expect(true).toBe(true))
-    it('should normalize using z-score', () => expect(true).toBe(true))
-  })
-
-  describe('removeOutliers()', () => {
-    it('should remove statistical outliers', () => expect(true).toBe(true))
-    it('should handle custom threshold', () => expect(true).toBe(true))
-  })
-})
-
-describe('Type Operations', () => {
-  describe('as()', () => {
-    it('should cast to new type', () => expect(true).toBe(true))
-    it('should handle type constraints', () => expect(true).toBe(true))
-  })
-
-  describe('pick()', () => {
-    it('should pick specified keys', () => expect(true).toBe(true))
-    it('should handle missing keys', () => expect(true).toBe(true))
-  })
-
-  describe('omit()', () => {
-    it('should omit specified keys', () => expect(true).toBe(true))
-    it('should handle missing keys', () => expect(true).toBe(true))
-  })
-
-  describe('transform()', () => {
-    it('should transform using schema', () => expect(true).toBe(true))
-    it('should handle complex transformations', () => expect(true).toBe(true))
-  })
-})
-
-describe('Specialized Data Types', () => {
-  describe('geoDistance()', () => {
-    it('should calculate distances in km', () => expect(true).toBe(true))
-    it('should calculate distances in miles', () => expect(true).toBe(true))
-  })
-
-  describe('money()', () => {
-    it('should format as currency', () => expect(true).toBe(true))
-    it('should handle different currencies', () => expect(true).toBe(true))
-  })
-
-  describe('dateTime()', () => {
-    it('should format dates', () => expect(true).toBe(true))
-    it('should handle different locales', () => expect(true).toBe(true))
-  })
-})
-
-describe('Database-like Operations', () => {
-  describe('query()', () => {
-    it('should handle SQL-like queries', () => expect(true).toBe(true))
-    it('should support parameterized queries', () => expect(true).toBe(true))
-  })
-
-  describe('having()', () => {
-    it('should filter grouped results', () => expect(true).toBe(true))
-    it('should support different operators', () => expect(true).toBe(true))
-  })
-
-  describe('crossJoin()', () => {
-    it('should perform cross join', () => expect(true).toBe(true))
-    it('should handle empty collections', () => expect(true).toBe(true))
-  })
-
-  describe('leftJoin()', () => {
-    it('should perform left join', () => expect(true).toBe(true))
-    it('should handle missing matches', () => expect(true).toBe(true))
-  })
-})
-
-describe('Export Operations', () => {
-  describe('toSQL()', () => {
-    it('should generate SQL insert statement', () => expect(true).toBe(true))
-    it('should handle complex data types', () => expect(true).toBe(true))
-  })
-
-  describe('toGraphQL()', () => {
-    it('should generate GraphQL query', () => expect(true).toBe(true))
-    it('should handle nested structures', () => expect(true).toBe(true))
-  })
-
-  describe('toElastic()', () => {
-    it('should format for Elasticsearch', () => expect(true).toBe(true))
-    it('should handle bulk operations', () => expect(true).toBe(true))
-  })
-
-  describe('toPandas()', () => {
-    it('should generate pandas DataFrame code', () => expect(true).toBe(true))
-    it('should handle complex data structures', () => expect(true).toBe(true))
-  })
-})
-
-describe('Streaming Operations', () => {
-  describe('stream()', () => {
-    it('should create readable stream', () => expect(true).toBe(true))
-    it('should handle backpressure', () => expect(true).toBe(true))
-  })
-
-  describe('fromStream()', () => {
-    it('should collect from stream', () => expect(true).toBe(true))
-    it('should handle stream errors', () => expect(true).toBe(true))
-  })
-
-  describe('batch()', () => {
-    it('should process in batches', () => expect(true).toBe(true))
-    it('should handle custom batch sizes', () => expect(true).toBe(true))
-  })
-})
-
-describe('Performance Monitoring', () => {
-  describe('metrics()', () => {
-    it('should collect performance metrics', () => expect(true).toBe(true))
-    it('should track memory usage', () => expect(true).toBe(true))
-  })
-
-  describe('profile()', () => {
-    it('should measure execution time', () => expect(true).toBe(true))
-    it('should measure memory usage', () => expect(true).toBe(true))
-  })
-
-  describe('instrument()', () => {
-    it('should track operation counts', () => expect(true).toBe(true))
-    it('should provide performance stats', () => expect(true).toBe(true))
-  })
-})
-
-describe('Development Tools', () => {
-  describe('playground()', () => {
-    it('should initialize playground', () => expect(true).toBe(true))
-  })
-
-  describe('explain()', () => {
-    it('should explain operation pipeline', () => expect(true).toBe(true))
-  })
-
-  describe('benchmark()', () => {
-    it('should benchmark operations', () => expect(true).toBe(true))
-    it('should calculate complexity', () => expect(true).toBe(true))
-  })
-})
-
-describe('Version Control', () => {
-  describe('diff()', () => {
-    it('should compare versions', () => expect(true).toBe(true))
-    it('should detect changes', () => expect(true).toBe(true))
-  })
-
-  describe('diffSummary()', () => {
-    it('should summarize changes', () => expect(true).toBe(true))
-    it('should count modifications', () => expect(true).toBe(true))
-  })
-})
-
-describe('Parallel Processing', () => {
-  describe('parallel()', () => {
-    it('should process in parallel', () => expect(true).toBe(true))
-    it('should respect concurrency limits', () => expect(true).toBe(true))
-  })
-
-  describe('prefetch()', () => {
-    it('should prefetch results', () => expect(true).toBe(true))
-    it('should cache prefetched data', () => expect(true).toBe(true))
-  })
-})
-
-describe('Cache and Memoization', () => {
-  describe('cacheStore', () => {
-    it('should store cache entries', () => expect(true).toBe(true))
-    it('should respect cache entry expiry', () => expect(true).toBe(true))
-  })
-})
-
-describe('Conditional Operations', () => {
-  describe('when()', () => {
-    it('should execute when condition is true', () => expect(true).toBe(true))
-    it('should skip when condition is false', () => expect(true).toBe(true))
-  })
-
-  describe('unless()', () => {
-    it('should execute when condition is false', () => expect(true).toBe(true))
-    it('should skip when condition is true', () => expect(true).toBe(true))
-  })
-})
-
-describe('Navigation and Paging', () => {
-  describe('forPage()', () => {
-    it('should return specific page', () => expect(true).toBe(true))
-    it('should handle out of bounds pages', () => expect(true).toBe(true))
-  })
-
-  describe('cursor()', () => {
-    it('should create async iterator', () => expect(true).toBe(true))
-    it('should respect chunk size', () => expect(true).toBe(true))
-  })
-})
-
-describe('Fuzzy Matching', () => {
-  describe('calculateFuzzyScore()', () => {
-    it('should calculate similarity score', () => expect(true).toBe(true))
-    it('should handle empty strings', () => expect(true).toBe(true))
-  })
-
-  describe('levenshteinDistance()', () => {
-    it('should calculate edit distance', () => expect(true).toBe(true))
-    it('should handle empty strings', () => expect(true).toBe(true))
-  })
-})
-
-describe('Machine Learning Utilities', () => {
-  describe('randomSplit()', () => {
-    it('should split data for isolation forest', () => expect(true).toBe(true))
-    it('should respect max depth', () => expect(true).toBe(true))
-  })
-
-  describe('distance()', () => {
-    it('should calculate distance for KNN', () => expect(true).toBe(true))
-    it('should handle different feature sets', () => expect(true).toBe(true))
-  })
-})
-
-describe('Type Handling', () => {
-  describe('KeyType', () => {
-    it('should enforce matching key types', () => expect(true).toBe(true))
-    it('should handle type constraints', () => expect(true).toBe(true))
-  })
-})
-
-describe('Geographic Calculations', () => {
-  describe('haversine()', () => {
-    it('should calculate great circle distance', () => expect(true).toBe(true))
-    it('should handle different units', () => expect(true).toBe(true))
-  })
-})
-
-describe('Collection Core', () => {
-  describe('createCollectionOperations()', () => {
-    it('should create new collection operations', () => expect(true).toBe(true))
-    it('should initialize with correct state', () => expect(true).toBe(true))
-    it('should maintain type safety', () => expect(true).toBe(true))
-  })
-})
+// describe('Collection Sorting Methods', () => {
+//   describe('sort()', () => {
+//     it('should sort with compare function', () => expect(true).toBe(true))
+//     it('should sort numbers by default', () => expect(true).toBe(true))
+//     it('should handle empty collection', () => expect(true).toBe(true))
+//   })
+
+//   describe('sortBy()', () => {
+//     it('should sort by key ascending', () => expect(true).toBe(true))
+//     it('should sort by key descending', () => expect(true).toBe(true))
+//     it('should handle non-existent key', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Set Operations', () => {
+//   describe('unique()', () => {
+//     it('should remove duplicates', () => expect(true).toBe(true))
+//     it('should remove duplicates by key', () => expect(true).toBe(true))
+//     it('should handle empty collection', () => expect(true).toBe(true))
+//   })
+
+//   describe('intersect()', () => {
+//     it('should find common elements', () => expect(true).toBe(true))
+//     it('should work with array input', () => expect(true).toBe(true))
+//     it('should handle empty input', () => expect(true).toBe(true))
+//   })
+
+//   describe('union()', () => {
+//     it('should combine unique elements', () => expect(true).toBe(true))
+//     it('should work with array input', () => expect(true).toBe(true))
+//     it('should handle empty input', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Utility Methods', () => {
+//   describe('tap()', () => {
+//     it('should execute callback and return collection', () => expect(true).toBe(true))
+//     it('should not modify collection', () => expect(true).toBe(true))
+//   })
+
+//   describe('pipe()', () => {
+//     it('should transform collection with callback', () => expect(true).toBe(true))
+//     it('should handle complex transformations', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Async Operations', () => {
+//   describe('mapAsync()', () => {
+//     it('should transform items asynchronously', () => expect(true).toBe(true))
+//     it('should maintain order', () => expect(true).toBe(true))
+//     it('should handle rejections', () => expect(true).toBe(true))
+//   })
+
+//   describe('filterAsync()', () => {
+//     it('should filter items asynchronously', () => expect(true).toBe(true))
+//     it('should handle async predicates', () => expect(true).toBe(true))
+//     it('should handle rejections', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Advanced Features', () => {
+//   describe('timeSeries()', () => {
+//     it('should create time series data', () => expect(true).toBe(true))
+//     it('should fill gaps correctly', () => expect(true).toBe(true))
+//     it('should handle different intervals', () => expect(true).toBe(true))
+//   })
+
+//   describe('movingAverage()', () => {
+//     it('should calculate moving average', () => expect(true).toBe(true))
+//     it('should handle different window sizes', () => expect(true).toBe(true))
+//     it('should support centered option', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection ML Operations', () => {
+//   describe('kmeans()', () => {
+//     it('should cluster data points', () => expect(true).toBe(true))
+//     it('should handle different distance metrics', () => expect(true).toBe(true))
+//     it('should respect max iterations', () => expect(true).toBe(true))
+//   })
+
+//   describe('linearRegression()', () => {
+//     it('should calculate regression coefficients', () => expect(true).toBe(true))
+//     it('should calculate R-squared', () => expect(true).toBe(true))
+//     it('should handle multiple independents', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Serialization', () => {
+//   describe('toJSON()', () => {
+//     it('should serialize to JSON string', () => expect(true).toBe(true))
+//     it('should handle circular references', () => expect(true).toBe(true))
+//     it('should respect serialization options', () => expect(true).toBe(true))
+//   })
+
+//   describe('toCsv()', () => {
+//     it('should convert to CSV format', () => expect(true).toBe(true))
+//     it('should handle nested objects', () => expect(true).toBe(true))
+//     it('should escape special characters', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Performance Features', () => {
+//   describe('cache()', () => {
+//     it('should cache results', () => expect(true).toBe(true))
+//     it('should respect TTL', () => expect(true).toBe(true))
+//     it('should handle cache invalidation', () => expect(true).toBe(true))
+//   })
+
+//   describe('lazy()', () => {
+//     it('should create lazy collection', () => expect(true).toBe(true))
+//     it('should defer execution', () => expect(true).toBe(true))
+//     it('should support chaining', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Advanced Transformations', () => {
+//   describe('mapToGroups()', () => {
+//     it('should map items to groups', () => expect(true).toBe(true))
+//     it('should handle complex group mappings', () => expect(true).toBe(true))
+//   })
+
+//   describe('mapSpread()', () => {
+//     it('should spread arguments to callback', () => expect(true).toBe(true))
+//     it('should handle arrays and objects', () => expect(true).toBe(true))
+//   })
+
+//   describe('mapUntil()', () => {
+//     it('should map until predicate is true', () => expect(true).toBe(true))
+//     it('should handle early termination', () => expect(true).toBe(true))
+//   })
+
+//   describe('mapOption()', () => {
+//     it('should filter out null/undefined values', () => expect(true).toBe(true))
+//     it('should transform remaining values', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('String Operations', () => {
+//   describe('join()', () => {
+//     it('should join string collections', () => expect(true).toBe(true))
+//     it('should use custom separator', () => expect(true).toBe(true))
+//   })
+
+//   describe('implode()', () => {
+//     it('should join by key', () => expect(true).toBe(true))
+//     it('should use custom separator', () => expect(true).toBe(true))
+//   })
+
+//   describe('lower()', () => {
+//     it('should convert to lowercase', () => expect(true).toBe(true))
+//   })
+
+//   describe('upper()', () => {
+//     it('should convert to uppercase', () => expect(true).toBe(true))
+//   })
+
+//   describe('slug()', () => {
+//     it('should create URL-friendly slug', () => expect(true).toBe(true))
+//     it('should handle special characters', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Set Operations', () => {
+//   describe('symmetricDiff()', () => {
+//     it('should find symmetric difference', () => expect(true).toBe(true))
+//     it('should work with collections and arrays', () => expect(true).toBe(true))
+//   })
+
+//   describe('cartesianProduct()', () => {
+//     it('should compute cartesian product', () => expect(true).toBe(true))
+//     it('should handle empty collections', () => expect(true).toBe(true))
+//   })
+
+//   describe('power()', () => {
+//     it('should compute power set', () => expect(true).toBe(true))
+//     it('should include empty set', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Advanced Math Operations', () => {
+//   describe('zscore()', () => {
+//     it('should calculate z-scores', () => expect(true).toBe(true))
+//     it('should handle key parameter', () => expect(true).toBe(true))
+//   })
+
+//   describe('kurtosis()', () => {
+//     it('should calculate kurtosis', () => expect(true).toBe(true))
+//     it('should handle key parameter', () => expect(true).toBe(true))
+//   })
+
+//   describe('skewness()', () => {
+//     it('should calculate skewness', () => expect(true).toBe(true))
+//     it('should handle key parameter', () => expect(true).toBe(true))
+//   })
+
+//   describe('covariance()', () => {
+//     it('should calculate covariance', () => expect(true).toBe(true))
+//     it('should handle different keys', () => expect(true).toBe(true))
+//   })
+
+//   describe('entropy()', () => {
+//     it('should calculate entropy', () => expect(true).toBe(true))
+//     it('should handle key parameter', () => expect(true).toBe(true))
+//   })
+
+//   describe('fft()', () => {
+//     it('should compute FFT for number collections', () => expect(true).toBe(true))
+//     it('should throw for non-number collections', () => expect(true).toBe(true))
+//   })
+
+//   describe('interpolate()', () => {
+//     it('should interpolate values', () => expect(true).toBe(true))
+//     it('should handle different point counts', () => expect(true).toBe(true))
+//   })
+
+//   describe('convolve()', () => {
+//     it('should convolve with kernel', () => expect(true).toBe(true))
+//     it('should handle different kernel sizes', () => expect(true).toBe(true))
+//   })
+
+//   describe('differentiate()', () => {
+//     it('should compute derivative', () => expect(true).toBe(true))
+//     it('should handle numeric collections', () => expect(true).toBe(true))
+//   })
+
+//   describe('integrate()', () => {
+//     it('should compute integral', () => expect(true).toBe(true))
+//     it('should handle numeric collections', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Text Analysis', () => {
+//   describe('sentiment()', () => {
+//     it('should analyze sentiment', () => expect(true).toBe(true))
+//     it('should calculate comparative score', () => expect(true).toBe(true))
+//   })
+
+//   describe('wordFrequency()', () => {
+//     it('should count word occurrences', () => expect(true).toBe(true))
+//     it('should handle case sensitivity', () => expect(true).toBe(true))
+//   })
+
+//   describe('ngrams()', () => {
+//     it('should generate n-grams', () => expect(true).toBe(true))
+//     it('should handle different n values', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Data Quality Operations', () => {
+//   describe('detectAnomalies()', () => {
+//     it('should detect using z-score method', () => expect(true).toBe(true))
+//     it('should detect using IQR method', () => expect(true).toBe(true))
+//     it('should detect using isolation forest', () => expect(true).toBe(true))
+//   })
+
+//   describe('impute()', () => {
+//     it('should impute using mean', () => expect(true).toBe(true))
+//     it('should impute using median', () => expect(true).toBe(true))
+//     it('should impute using mode', () => expect(true).toBe(true))
+//   })
+
+//   describe('normalize()', () => {
+//     it('should normalize using min-max', () => expect(true).toBe(true))
+//     it('should normalize using z-score', () => expect(true).toBe(true))
+//   })
+
+//   describe('removeOutliers()', () => {
+//     it('should remove statistical outliers', () => expect(true).toBe(true))
+//     it('should handle custom threshold', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Type Operations', () => {
+//   describe('as()', () => {
+//     it('should cast to new type', () => expect(true).toBe(true))
+//     it('should handle type constraints', () => expect(true).toBe(true))
+//   })
+
+//   describe('pick()', () => {
+//     it('should pick specified keys', () => expect(true).toBe(true))
+//     it('should handle missing keys', () => expect(true).toBe(true))
+//   })
+
+//   describe('omit()', () => {
+//     it('should omit specified keys', () => expect(true).toBe(true))
+//     it('should handle missing keys', () => expect(true).toBe(true))
+//   })
+
+//   describe('transform()', () => {
+//     it('should transform using schema', () => expect(true).toBe(true))
+//     it('should handle complex transformations', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Specialized Data Types', () => {
+//   describe('geoDistance()', () => {
+//     it('should calculate distances in km', () => expect(true).toBe(true))
+//     it('should calculate distances in miles', () => expect(true).toBe(true))
+//   })
+
+//   describe('money()', () => {
+//     it('should format as currency', () => expect(true).toBe(true))
+//     it('should handle different currencies', () => expect(true).toBe(true))
+//   })
+
+//   describe('dateTime()', () => {
+//     it('should format dates', () => expect(true).toBe(true))
+//     it('should handle different locales', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Database-like Operations', () => {
+//   describe('query()', () => {
+//     it('should handle SQL-like queries', () => expect(true).toBe(true))
+//     it('should support parameterized queries', () => expect(true).toBe(true))
+//   })
+
+//   describe('having()', () => {
+//     it('should filter grouped results', () => expect(true).toBe(true))
+//     it('should support different operators', () => expect(true).toBe(true))
+//   })
+
+//   describe('crossJoin()', () => {
+//     it('should perform cross join', () => expect(true).toBe(true))
+//     it('should handle empty collections', () => expect(true).toBe(true))
+//   })
+
+//   describe('leftJoin()', () => {
+//     it('should perform left join', () => expect(true).toBe(true))
+//     it('should handle missing matches', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Export Operations', () => {
+//   describe('toSQL()', () => {
+//     it('should generate SQL insert statement', () => expect(true).toBe(true))
+//     it('should handle complex data types', () => expect(true).toBe(true))
+//   })
+
+//   describe('toGraphQL()', () => {
+//     it('should generate GraphQL query', () => expect(true).toBe(true))
+//     it('should handle nested structures', () => expect(true).toBe(true))
+//   })
+
+//   describe('toElastic()', () => {
+//     it('should format for Elasticsearch', () => expect(true).toBe(true))
+//     it('should handle bulk operations', () => expect(true).toBe(true))
+//   })
+
+//   describe('toPandas()', () => {
+//     it('should generate pandas DataFrame code', () => expect(true).toBe(true))
+//     it('should handle complex data structures', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Streaming Operations', () => {
+//   describe('stream()', () => {
+//     it('should create readable stream', () => expect(true).toBe(true))
+//     it('should handle backpressure', () => expect(true).toBe(true))
+//   })
+
+//   describe('fromStream()', () => {
+//     it('should collect from stream', () => expect(true).toBe(true))
+//     it('should handle stream errors', () => expect(true).toBe(true))
+//   })
+
+//   describe('batch()', () => {
+//     it('should process in batches', () => expect(true).toBe(true))
+//     it('should handle custom batch sizes', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Performance Monitoring', () => {
+//   describe('metrics()', () => {
+//     it('should collect performance metrics', () => expect(true).toBe(true))
+//     it('should track memory usage', () => expect(true).toBe(true))
+//   })
+
+//   describe('profile()', () => {
+//     it('should measure execution time', () => expect(true).toBe(true))
+//     it('should measure memory usage', () => expect(true).toBe(true))
+//   })
+
+//   describe('instrument()', () => {
+//     it('should track operation counts', () => expect(true).toBe(true))
+//     it('should provide performance stats', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Development Tools', () => {
+//   describe('playground()', () => {
+//     it('should initialize playground', () => expect(true).toBe(true))
+//   })
+
+//   describe('explain()', () => {
+//     it('should explain operation pipeline', () => expect(true).toBe(true))
+//   })
+
+//   describe('benchmark()', () => {
+//     it('should benchmark operations', () => expect(true).toBe(true))
+//     it('should calculate complexity', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Version Control', () => {
+//   describe('diff()', () => {
+//     it('should compare versions', () => expect(true).toBe(true))
+//     it('should detect changes', () => expect(true).toBe(true))
+//   })
+
+//   describe('diffSummary()', () => {
+//     it('should summarize changes', () => expect(true).toBe(true))
+//     it('should count modifications', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Parallel Processing', () => {
+//   describe('parallel()', () => {
+//     it('should process in parallel', () => expect(true).toBe(true))
+//     it('should respect concurrency limits', () => expect(true).toBe(true))
+//   })
+
+//   describe('prefetch()', () => {
+//     it('should prefetch results', () => expect(true).toBe(true))
+//     it('should cache prefetched data', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Cache and Memoization', () => {
+//   describe('cacheStore', () => {
+//     it('should store cache entries', () => expect(true).toBe(true))
+//     it('should respect cache entry expiry', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Conditional Operations', () => {
+//   describe('when()', () => {
+//     it('should execute when condition is true', () => expect(true).toBe(true))
+//     it('should skip when condition is false', () => expect(true).toBe(true))
+//   })
+
+//   describe('unless()', () => {
+//     it('should execute when condition is false', () => expect(true).toBe(true))
+//     it('should skip when condition is true', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Navigation and Paging', () => {
+//   describe('forPage()', () => {
+//     it('should return specific page', () => expect(true).toBe(true))
+//     it('should handle out of bounds pages', () => expect(true).toBe(true))
+//   })
+
+//   describe('cursor()', () => {
+//     it('should create async iterator', () => expect(true).toBe(true))
+//     it('should respect chunk size', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Fuzzy Matching', () => {
+//   describe('calculateFuzzyScore()', () => {
+//     it('should calculate similarity score', () => expect(true).toBe(true))
+//     it('should handle empty strings', () => expect(true).toBe(true))
+//   })
+
+//   describe('levenshteinDistance()', () => {
+//     it('should calculate edit distance', () => expect(true).toBe(true))
+//     it('should handle empty strings', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Machine Learning Utilities', () => {
+//   describe('randomSplit()', () => {
+//     it('should split data for isolation forest', () => expect(true).toBe(true))
+//     it('should respect max depth', () => expect(true).toBe(true))
+//   })
+
+//   describe('distance()', () => {
+//     it('should calculate distance for KNN', () => expect(true).toBe(true))
+//     it('should handle different feature sets', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Type Handling', () => {
+//   describe('KeyType', () => {
+//     it('should enforce matching key types', () => expect(true).toBe(true))
+//     it('should handle type constraints', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Geographic Calculations', () => {
+//   describe('haversine()', () => {
+//     it('should calculate great circle distance', () => expect(true).toBe(true))
+//     it('should handle different units', () => expect(true).toBe(true))
+//   })
+// })
+
+// describe('Collection Core', () => {
+//   describe('createCollectionOperations()', () => {
+//     it('should create new collection operations', () => expect(true).toBe(true))
+//     it('should initialize with correct state', () => expect(true).toBe(true))
+//     it('should maintain type safety', () => expect(true).toBe(true))
+//   })
+// })
