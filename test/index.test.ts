@@ -1839,19 +1839,256 @@ describe('Collection Advanced Features', () => {
   })
 })
 
-// describe('Collection ML Operations', () => {
-//   describe('kmeans()', () => {
-//     it('should cluster data points', () => expect(true).toBe(true))
-//     it('should handle different distance metrics', () => expect(true).toBe(true))
-//     it('should respect max iterations', () => expect(true).toBe(true))
-//   })
+describe('Collection ML Operations', () => {
+  describe('kmeans()', () => {
+    interface Point2D {
+      x: number
+      y: number
+    }
 
-//   describe('linearRegression()', () => {
-//     it('should calculate regression coefficients', () => expect(true).toBe(true))
-//     it('should calculate R-squared', () => expect(true).toBe(true))
-//     it('should handle multiple independents', () => expect(true).toBe(true))
-//   })
-// })
+    it('should cluster data points', () => {
+      const points = collect<Point2D>([
+        { x: 1, y: 1 },
+        { x: 1.5, y: 2 },
+        { x: 3, y: 4 },
+        { x: 5, y: 7 },
+        { x: 3.5, y: 5 },
+        { x: 4.5, y: 5 },
+        { x: 3.5, y: 4.5 },
+      ])
+
+      const clusters = points.kmeans({ k: 2 })
+
+      // All points should be assigned a cluster
+      expect(clusters.count()).toBe(points.count())
+
+      // Should have exactly 2 different cluster numbers
+      const uniqueClusters = new Set(clusters.pluck('cluster').toArray())
+      expect(uniqueClusters.size).toBe(2)
+
+      // Points close to each other should be in the same cluster
+      const cluster0 = clusters.filter(p => p.cluster === 0).pluck('data').toArray()
+      const cluster1 = clusters.filter(p => p.cluster === 1).pluck('data').toArray()
+
+      // Calculate cluster centroids
+      const c0Centroid = {
+        x: cluster0.reduce((sum, p) => sum + p.x, 0) / cluster0.length,
+        y: cluster0.reduce((sum, p) => sum + p.y, 0) / cluster0.length,
+      }
+      const c1Centroid = {
+        x: cluster1.reduce((sum, p) => sum + p.x, 0) / cluster1.length,
+        y: cluster1.reduce((sum, p) => sum + p.y, 0) / cluster1.length,
+      }
+
+      // Ensure points are closer to their own centroid than the other centroid
+      for (const point of cluster0) {
+        const distToC0 = Math.sqrt((point.x - c0Centroid.x) ** 2 + (point.y - c0Centroid.y) ** 2)
+        const distToC1 = Math.sqrt((point.x - c1Centroid.x) ** 2 + (point.y - c1Centroid.y) ** 2)
+        expect(distToC0).toBeLessThan(distToC1)
+      }
+    })
+
+    it('should handle different distance metrics', () => {
+      const points = collect<Point2D>([
+        { x: 1, y: 1 },
+        { x: 2, y: 2 },
+        { x: 5, y: 5 },
+        { x: 6, y: 6 },
+      ])
+
+      const euclideanClusters = points.kmeans({
+        k: 2,
+        distanceMetric: 'euclidean',
+      })
+      const manhattanClusters = points.kmeans({
+        k: 2,
+        distanceMetric: 'manhattan',
+      })
+
+      // Both metrics should cluster the points
+      expect(euclideanClusters.count()).toBe(4)
+      expect(manhattanClusters.count()).toBe(4)
+
+      // Results might differ but should be valid
+      expect(new Set(euclideanClusters.pluck('cluster').toArray()).size).toBe(2)
+      expect(new Set(manhattanClusters.pluck('cluster').toArray()).size).toBe(2)
+    })
+
+    it('should respect max iterations', () => {
+      const points = collect<Point2D>([
+        { x: 1, y: 1 },
+        { x: 1.1, y: 1.1 },
+        { x: 1.2, y: 1.2 },
+        { x: 5, y: 5 },
+        { x: 5.1, y: 5.1 },
+        { x: 5.2, y: 5.2 },
+      ])
+
+      const startTime = Date.now()
+      const clusters = points.kmeans({
+        k: 2,
+        maxIterations: 1,
+      })
+      const endTime = Date.now()
+
+      // Should complete quickly with max 1 iteration
+      expect(endTime - startTime).toBeLessThan(100)
+      expect(clusters.count()).toBe(points.count())
+    })
+
+    it('should handle edge cases', () => {
+      // Empty collection
+      const empty = collect<Point2D>([])
+      expect(empty.kmeans({ k: 2 }).count()).toBe(0)
+
+      // Single point
+      const single = collect<Point2D>([{ x: 1, y: 1 }])
+      expect(single.kmeans({ k: 1 }).count()).toBe(1)
+
+      // k larger than number of points should throw
+      const few = collect<Point2D>([{ x: 1, y: 1 }, { x: 2, y: 2 }])
+      expect(() => few.kmeans({ k: 3 })).toThrow()
+    })
+
+    it('should handle high-dimensional data', () => {
+      interface Point3D {
+        x: number
+        y: number
+        z: number
+      }
+
+      const points = collect<Point3D>([
+        { x: 1, y: 1, z: 1 },
+        { x: 1.5, y: 1.5, z: 1.5 },
+        { x: 5, y: 5, z: 5 },
+        { x: 5.5, y: 5.5, z: 5.5 },
+      ])
+
+      const clusters = points.kmeans({ k: 2 })
+      expect(clusters.count()).toBe(4)
+      expect(new Set(clusters.pluck('cluster').toArray()).size).toBe(2)
+    })
+  })
+
+  describe('linearRegression()', () => {
+    interface DataPoint {
+      x1: number
+      x2: number
+      y: number
+    }
+
+    it('should calculate regression coefficients', () => {
+      const data = collect<DataPoint>([
+        { x1: 1, x2: 2, y: 3 },
+        { x1: 2, x2: 3, y: 5 },
+        { x1: 3, x2: 4, y: 7 },
+        { x1: 4, x2: 5, y: 9 },
+      ])
+
+      const result = data.linearRegression('y', ['x1', 'x2'])
+
+      // Should have coefficients for intercept and each independent variable
+      expect(result.coefficients).toHaveLength(3)
+
+      // Predictions should be close to actual values
+      result.predictions.forEach((pred, i) => {
+        expect(pred).toBeCloseTo(data.toArray()[i].y, 1)
+      })
+    })
+
+    it('should calculate R-squared', () => {
+      const perfectFit = collect<DataPoint>([
+        { x1: 1, x2: 0, y: 2 },
+        { x1: 2, x2: 0, y: 4 },
+        { x1: 3, x2: 0, y: 6 },
+      ])
+
+      const noisyFit = collect<DataPoint>([
+        { x1: 1, x2: 0, y: 2.5 },
+        { x1: 2, x2: 0, y: 3.8 },
+        { x1: 3, x2: 0, y: 5.9 },
+      ])
+
+      const perfectResult = perfectFit.linearRegression('y', ['x1'])
+      const noisyResult = noisyFit.linearRegression('y', ['x1'])
+
+      // Perfect linear relationship should have R² close to 1
+      expect(perfectResult.rSquared).toBeCloseTo(1, 2)
+
+      // Noisy data should have lower R²
+      expect(noisyResult.rSquared).toBeLessThan(1)
+      expect(noisyResult.rSquared).toBeGreaterThan(0.9) // Still strong correlation
+    })
+
+    it('should handle multiple independents', () => {
+      const data = collect<DataPoint>([
+        { x1: 1, x2: 1, y: 3 },
+        { x1: 2, x2: 2, y: 6 },
+        { x1: 3, x2: 3, y: 9 },
+        { x1: 4, x2: 4, y: 12 },
+      ])
+
+      const resultOne = data.linearRegression('y', ['x1'])
+      const resultTwo = data.linearRegression('y', ['x1', 'x2'])
+
+      // Both models should have good fit
+      expect(resultOne.rSquared).toBeGreaterThan(0.9)
+      expect(resultTwo.rSquared).toBeGreaterThan(0.9)
+
+      // Model with two variables should have one more coefficient
+      expect(resultTwo.coefficients.length).toBe(resultOne.coefficients.length + 1)
+    })
+
+    it('should handle edge cases', () => {
+      interface SimpleData {
+        x: number
+        y: number
+      }
+
+      // Perfect correlation
+      const perfect = collect<SimpleData>([
+        { x: 1, y: 2 },
+        { x: 2, y: 4 },
+        { x: 3, y: 6 },
+      ])
+      const perfectResult = perfect.linearRegression('y', ['x'])
+      expect(perfectResult.rSquared).toBeCloseTo(1, 10)
+
+      // No correlation
+      const noCorrelation = collect<SimpleData>([
+        { x: 1, y: 10 },
+        { x: 2, y: 10 },
+        { x: 3, y: 10 },
+      ])
+      const noCorResult = noCorrelation.linearRegression('y', ['x'])
+      expect(noCorResult.rSquared).toBeCloseTo(0, 10)
+
+      // Single point should throw
+      const single = collect<SimpleData>([{ x: 1, y: 2 }])
+      expect(() => single.linearRegression('y', ['x'])).toThrow()
+    })
+
+    it('should calculate residuals', () => {
+      const data = collect<DataPoint>([
+        { x1: 1, x2: 0, y: 2 },
+        { x1: 2, x2: 0, y: 4.1 }, // Slight deviation from perfect fit
+        { x1: 3, x2: 0, y: 6 },
+      ])
+
+      const result = data.linearRegression('y', ['x1'])
+
+      // Sum of residuals should be close to 0
+      const residualSum = result.residuals.reduce((a, b) => a + b, 0)
+      expect(residualSum).toBeCloseTo(0, 10)
+
+      // Should have one residual per data point
+      expect(result.residuals.length).toBe(data.count())
+
+      // At least one residual should be non-zero (due to the deviation)
+      expect(result.residuals.some(r => Math.abs(r) > 0.01)).toBe(true)
+    })
+  })
+})
 
 // describe('Collection Serialization', () => {
 //   describe('toJSON()', () => {

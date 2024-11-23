@@ -528,3 +528,35 @@ export interface CollectionOperations<T> extends Collection<T> {
   //   quality: DataQualityMetrics
   // }
 }
+
+export interface CacheEntry<T> {
+  data: T[]
+  expiry: number
+}
+
+export interface ClusterResult<T> {
+  cluster: number
+  data: T
+}
+
+export interface PluckedCluster {
+  values: () => number[]
+  toArray: () => number[]
+  [Symbol.iterator]: () => IterableIterator<number>
+}
+
+export interface PluckedData<T> {
+  values: () => T[]
+  toArray: () => T[]
+  forEach: (callback: (item: T) => void) => void
+  avg: (field: keyof T) => number
+  filter: (predicate: (item: T) => boolean) => PluckedData<T>
+}
+
+export interface KMeansResult<T> extends CollectionOperations<ClusterResult<T>> {
+  pluck: {
+    (key: 'cluster'): PluckedCluster
+    (key: 'data'): PluckedData<T>
+    <K extends keyof ClusterResult<T>>(key: K): CollectionOperations<ClusterResult<T>[K]>
+  }
+}

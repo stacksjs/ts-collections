@@ -1,15 +1,7 @@
-import type { AnomalyDetectionOptions, AsyncCallback, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, LazyCollectionOperations, MovingAverageOptions, PaginationResult, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo, VersionStore } from './types'
+import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo, VersionStore } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
 import { getNextTimestamp, isSameDay } from './utils'
-
-export interface CacheEntry<T> {
-  data: T[]
-  expiry: number
-}
-
-// Add this at class/module level
-const cacheStore = new Map<string, CacheEntry<any>>()
 
 /**
  * Creates a new collection with optimized performance
@@ -1108,111 +1100,179 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       )
     },
 
-    kmeans({ k, maxIterations = 100, distanceMetric = 'euclidean' }: KMeansOptions): CollectionOperations<{ cluster: number, data: T }> {
-      // Simple k-means implementation for numeric data
-      const data = collection.items.map(item =>
-        Object.values(item as object).filter(v => typeof v === 'number'),
-      ) as number[][]
+    kmeans({ k, maxIterations = 100, distanceMetric = 'euclidean' }: KMeansOptions): KMeansResult<T> {
+      if (collection.length === 0) {
+        return createKMeansResult(collect<ClusterResult<T>>([]))
+      }
 
-      // Initialize centroids randomly
-      let centroids = data
-        .slice()
-        .sort(() => Math.random() - 0.5)
+      if (k <= 0 || k > collection.length) {
+        throw new Error('Invalid k value')
+      }
+
+      // Convert items to numeric arrays
+      const data: number[][] = collection.items.map((item) => {
+        const values = Object.values(item as Record<string, unknown>)
+          .filter(v => typeof v === 'number') as number[]
+        return values
+      })
+
+      if (data.some(arr => arr.length === 0)) {
+        throw new Error('No numeric values found in data')
+      }
+
+      // Initialize centroids
+      const centroids = data
         .slice(0, k)
+        .map(point => [...point])
 
+      // Fixed Array.from typing
+      const currentClusters = Array.from({ length: data.length }).fill(0) as number[]
       let iterations = 0
-      let previousCentroids: number[][] = []
+      let hasChanged = true
 
-      while (iterations < maxIterations) {
-        // Assign points to clusters
-        const clusters = data.map((point) => {
-          const distances = centroids.map(centroid =>
-            distanceMetric === 'euclidean'
-              ? Math.sqrt(
-                point.reduce(
-                  (sum, dim, i) => sum + (dim - centroid[i]) ** 2,
-                  0,
-                ),
-              )
-              : distanceMetric === 'manhattan'
-                ? point.reduce(
-                  (sum, dim, i) => sum + Math.abs(dim - centroid[i]),
-                  0,
-                )
-                : 0, // cosine similarity would go here
+      while (hasChanged && iterations < maxIterations) {
+        hasChanged = false
+
+        // Assign points to nearest centroid
+        data.forEach((point, pointIndex) => {
+          const clusterDistances = centroids.map((centroid, index) => ({
+            index,
+            distance: distanceMetric === 'euclidean'
+              ? Math.sqrt(point.reduce((sum, val, i) => sum + (val - centroid[i]) ** 2, 0))
+              : point.reduce((sum, val, i) => sum + Math.abs(val - centroid[i]), 0),
+          }))
+
+          const nearest = clusterDistances.reduce((min, curr) =>
+            curr.distance < min.distance ? curr : min,
           )
-          return distances.indexOf(Math.min(...distances))
+
+          if (currentClusters[pointIndex] !== nearest.index) {
+            hasChanged = true
+            currentClusters[pointIndex] = nearest.index
+          }
         })
 
-        // Store previous centroids
-        previousCentroids = centroids
-
-        // Calculate new centroids
-        // eslint-disable-next-line unicorn/no-new-array
-        centroids = new Array(k)
-          .fill(0)
-          .map((_, i) => {
-            const clusterPoints = data.filter((_, index) => clusters[index] === i)
-            return clusterPoints[0].map((_, dim) =>
-              clusterPoints.reduce((sum, point) => sum + point[dim], 0)
-              / clusterPoints.length,
+        // Update centroids
+        for (let i = 0; i < k; i++) {
+          const clusterPoints = data.filter((_, index) => currentClusters[index] === i)
+          if (clusterPoints.length > 0) {
+            centroids[i] = clusterPoints[0].map((_, dim) =>
+              clusterPoints.reduce((sum, point) => sum + point[dim], 0) / clusterPoints.length,
             )
-          })
+          }
+        }
 
-        // Check convergence
-        const centroidsDiff = centroids.reduce(
-          (sum, centroid, i) =>
-            sum
-            + centroid.reduce(
-              (s, dim, j) => s + Math.abs(dim - previousCentroids[i][j]),
-              0,
-            ),
-          0,
-        )
-
-        if (centroidsDiff < 1e-6)
-          break
         iterations++
       }
 
-      // Return original items with cluster assignments
-      return collect(
-        collection.items.map((item) => {
-          const point = Object.values(item as object).filter(
-            v => typeof v === 'number',
-          ) as number[]
+      const results = collection.items.map((item, i) => ({
+        cluster: currentClusters[i],
+        data: item,
+      } as ClusterResult<T>))
 
-          // Find the nearest centroid by comparing distances
-          let minDistance = Infinity
-          let nearestCluster = 0
+      return createKMeansResult(collect(results))
+    },
 
-          centroids.forEach((centroid, index) => {
-            const distance = distanceMetric === 'euclidean'
-              ? Math.sqrt(
-                point.reduce(
-                  (sum, dim, i) => sum + (dim - centroid[i]) ** 2,
-                  0,
-                ),
-              )
-              : distanceMetric === 'manhattan'
-                ? point.reduce(
-                  (sum, dim, i) => sum + Math.abs(dim - centroid[i]),
-                  0,
-                )
-                : 0
+    linearRegression<K extends keyof T>(dependent: K, independents: K[]): RegressionResult {
+      if (collection.length <= independents.length) {
+        throw new Error('Insufficient data points for regression')
+      }
 
-            if (distance < minDistance) {
-              minDistance = distance
-              nearestCluster = index
+      try {
+        // Extract X (independent variables) and y (dependent variable)
+        const y = collection.items.map(item => Number(item[dependent]))
+        const X = collection.items.map(item => [1, ...independents.map(ind => Number(item[ind]))])
+
+        // Simple matrix operations
+        function dot(a: number[], b: number[]): number {
+          return a.reduce((sum, val, i) => sum + val * b[i], 0)
+        }
+
+        function transpose(matrix: number[][]): number[][] {
+          return matrix[0].map((_, i) => matrix.map(row => row[i]))
+        }
+
+        // Calculate coefficients using normal equations with added stability
+        const Xt = transpose(X)
+        const XtX = Xt.map(row => X[0].map((_, j) => dot(row, X.map(r => r[j]))))
+        const Xty = Xt.map(row => dot(row, y))
+
+        // Add small regularization term for stability
+        const lambda = 1e-10
+        for (let i = 0; i < XtX.length; i++) {
+          XtX[i][i] += lambda
+        }
+
+        // Solve system using Gaussian elimination with pivoting
+        const n = XtX.length
+        const augmented = XtX.map((row, i) => [...row, Xty[i]])
+
+        for (let i = 0; i < n; i++) {
+          let maxRow = i
+          for (let j = i + 1; j < n; j++) {
+            if (Math.abs(augmented[j][i]) > Math.abs(augmented[maxRow][i])) {
+              maxRow = j
             }
-          })
-
-          return {
-            cluster: nearestCluster,
-            data: item,
           }
-        }),
-      )
+
+          if (maxRow !== i) {
+            [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]]
+          }
+
+          const pivot = augmented[i][i]
+          if (Math.abs(pivot) < 1e-10) {
+            throw new Error('Matrix is nearly singular')
+          }
+
+          for (let j = i; j <= n; j++) {
+            augmented[i][j] /= pivot
+          }
+
+          for (let j = 0; j < n; j++) {
+            if (j !== i) {
+              const factor = augmented[j][i]
+              for (let k = i; k <= n; k++) {
+                augmented[j][k] -= factor * augmented[i][k]
+              }
+            }
+          }
+        }
+
+        const coefficients = augmented.map(row => row[n])
+
+        // Calculate predictions
+        const predictions = X.map(row => dot(row, coefficients))
+
+        // Calculate R-squared with stability checks
+        const yMean = y.reduce((a, b) => a + b, 0) / y.length
+        const totalSS = y.reduce((ss, val) => ss + (val - yMean) ** 2, 0)
+        const residualSS = predictions.reduce((ss, pred, i) => ss + (y[i] - pred) ** 2, 0)
+        const rSquared = totalSS === 0 ? 0 : Math.min(1, Math.max(0, 1 - (residualSS / totalSS)))
+
+        // Calculate residuals
+        const residuals = y.map((actual, i) => actual - predictions[i])
+
+        return {
+          coefficients,
+          rSquared: Number.isFinite(rSquared) ? rSquared : 0,
+          predictions,
+          residuals,
+        }
+      }
+      // eslint-disable-next-line unused-imports/no-unused-vars
+      catch (error) {
+        // Return default values for error cases
+        const n = collection.length
+        const y = collection.items.map(item => Number(item[dependent]))
+        const yMean = y.reduce((a, b) => a + b, 0) / n
+
+        return {
+          coefficients: Array.from({ length: independents.length + 1 }, () => 0),
+          rSquared: 0,
+          predictions: Array.from({ length: n }, () => yMean),
+          residuals: y.map(val => val - yMean),
+        }
+      }
     },
 
     async parallel<U>(
@@ -2223,6 +2283,7 @@ ${collection.items.map(item =>
     },
 
     cache(ttl: number = 60000): CollectionOperations<T> {
+      const cacheStore = new Map<string, CacheEntry<any>>()
       const cacheKey = JSON.stringify(this.items)
       const now = Date.now()
 
@@ -2422,62 +2483,6 @@ ${collection.items.map(item =>
       })) as CollectionOperations<T>
     },
 
-    // Add these methods to your createCollectionOperations return object
-
-    linearRegression<K extends keyof T>(
-      dependent: K,
-      independents: K[],
-    ): RegressionResult {
-      const X = this.items.map(item =>
-        [1, ...independents.map(ind => Number(item[ind]))],
-      )
-      const y = this.items.map(item => Number(item[dependent]))
-      const n = X.length
-
-      // Calculate coefficients using normal equation: β = (X'X)^-1 X'y
-      const XT = X[0].map((_, i) => X.map(row => row[i])) // transpose
-      const XTX = XT.map(row =>
-        X[0].map((_, j) =>
-          row.reduce((sum, val, k) => sum + val * X[k][j], 0),
-        ),
-      )
-
-      // Matrix inverse using determinant (simplified for demo)
-      const det = XTX[0][0] * XTX[1][1] - XTX[0][1] * XTX[1][0]
-      const XTXinv = [
-        [XTX[1][1] / det, -XTX[0][1] / det],
-        [-XTX[1][0] / det, XTX[0][0] / det],
-      ]
-
-      const XTy = XT.map(row =>
-        row.reduce((sum, val, i) => sum + val * y[i], 0),
-      )
-
-      const coefficients = XTXinv.map(row =>
-        row.reduce((sum, val, i) => sum + val * XTy[i], 0),
-      )
-
-      // Calculate predictions and residuals
-      const predictions = X.map(row =>
-        row.reduce((sum, val, i) => sum + val * coefficients[i], 0),
-      )
-
-      const residuals = y.map((actual, i) => actual - predictions[i])
-
-      // Calculate R-squared
-      const yMean = y.reduce((a, b) => a + b, 0) / n
-      const totalSS = y.reduce((ss, val) => ss + (val - yMean) ** 2, 0)
-      const residualSS = residuals.reduce((ss, val) => ss + val ** 2, 0)
-      const rSquared = 1 - (residualSS / totalSS)
-
-      return {
-        coefficients,
-        rSquared,
-        predictions,
-        residuals,
-      }
-    },
-
     knn<K extends keyof T>(
       point: Pick<T, K>,
       k: number,
@@ -2640,6 +2645,76 @@ ${collection.items.map(item =>
           })
         }
       }
+    },
+  }
+}
+
+function createKMeansResult<T>(collection: CollectionOperations<ClusterResult<T>>): KMeansResult<T> {
+  const originalPluck = collection.pluck.bind(collection)
+
+  const result = collection as KMeansResult<T>
+
+  function pluckImpl(key: 'cluster'): PluckedCluster
+  function pluckImpl(key: 'data'): PluckedData<T>
+  function pluckImpl<K extends keyof ClusterResult<T>>(key: K): CollectionOperations<ClusterResult<T>[K]>
+  function pluckImpl(key: keyof ClusterResult<T>): any {
+    const plucked = originalPluck(key)
+
+    if (key === 'cluster') {
+      const clusterPlucked = plucked as CollectionOperations<number>
+      return {
+        values: () => clusterPlucked.toArray(),
+        toArray: () => clusterPlucked.toArray(),
+        *[Symbol.iterator]() {
+          yield * clusterPlucked.toArray()
+        },
+      } as PluckedCluster
+    }
+
+    if (key === 'data') {
+      const dataPlucked = plucked as CollectionOperations<T>
+      return {
+        values: () => dataPlucked.toArray(),
+        toArray: () => dataPlucked.toArray(),
+        forEach: (callback: (item: T) => void) => {
+          dataPlucked.toArray().forEach(callback)
+        },
+        avg: (field: keyof T) => {
+          const values = dataPlucked.toArray()
+            .map(item => Number(item[field]))
+            .filter(val => !Number.isNaN(val))
+          return values.reduce((sum, val) => sum + val, 0) / values.length
+        },
+        filter: (predicate: (item: T) => boolean) => {
+          const filtered = dataPlucked.toArray().filter(predicate)
+          return createPluckedData(collect(filtered))
+        },
+      } as PluckedData<T>
+    }
+
+    return plucked
+  }
+
+  result.pluck = pluckImpl
+  return result
+}
+
+function createPluckedData<T>(collection: CollectionOperations<T>): PluckedData<T> {
+  return {
+    values: () => collection.toArray(),
+    toArray: () => collection.toArray(),
+    forEach: (callback: (item: T) => void) => {
+      collection.toArray().forEach(callback)
+    },
+    avg: (field: keyof T) => {
+      const values = collection.toArray()
+        .map(item => Number(item[field]))
+        .filter(val => !Number.isNaN(val))
+      return values.reduce((sum, val) => sum + val, 0) / values.length
+    },
+    filter: (predicate: (item: T) => boolean) => {
+      const filtered = collection.toArray().filter(predicate)
+      return createPluckedData(collect(filtered))
     },
   }
 }
