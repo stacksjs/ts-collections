@@ -396,7 +396,7 @@ describe('Collection Aggregation Methods', () => {
       expect(numbers.median()).toBe(2.5)
 
       const unsorted = collect([4, 1, 3, 2])
-      expect(numbers.median()).toBe(2.5)
+      expect(unsorted.median()).toBe(2.5)
 
       const decimals = collect([1.5, 2.5, 3.5, 4.5])
       expect(decimals.median()).toBe(3)
