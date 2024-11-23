@@ -1268,17 +1268,178 @@ describe('Collection Set Operations', () => {
   })
 })
 
-// describe('Collection Utility Methods', () => {
-//   describe('tap()', () => {
-//     it('should execute callback and return collection', () => expect(true).toBe(true))
-//     it('should not modify collection', () => expect(true).toBe(true))
-//   })
+describe('Collection Utility Methods', () => {
+  describe('tap()', () => {
+    it('should execute callback and return collection', () => {
+      let counter = 0
+      const collection = collect([1, 2, 3])
 
-//   describe('pipe()', () => {
-//     it('should transform collection with callback', () => expect(true).toBe(true))
-//     it('should handle complex transformations', () => expect(true).toBe(true))
-//   })
-// })
+      const result = collection.tap((items) => {
+        counter += items.count()
+      })
+
+      expect(counter).toBe(3) // Callback was executed
+      expect(result).toBe(collection) // Same collection instance returned
+      expect(result.toArray()).toEqual([1, 2, 3]) // Data unchanged
+    })
+
+    it('should not modify collection', () => {
+      const original = [{ id: 1, value: 'test' }, { id: 2, value: 'example' }]
+      const collection = collect(original)
+
+      // Even if we try to modify the collection in the callback
+      collection.tap((items) => {
+        items.items[0].value = 'modified'
+        // @ts-ignore - intentionally trying to modify private property
+        items.items = []
+      })
+
+      // Original references should be maintained but values can be modified
+      expect(collection.count()).toBe(2)
+      expect(collection.first()?.value).toBe('modified')
+      expect(collection.toArray()).toEqual([
+        { id: 1, value: 'modified' },
+        { id: 2, value: 'example' },
+      ])
+    })
+
+    it('should handle async operations in callback', async () => {
+      const collection = collect([1, 2, 3])
+      let asyncResult = 0
+
+      const result = collection.tap(async (items) => {
+        await Promise.resolve()
+        asyncResult = items.sum()
+      })
+
+      // Tap should still return synchronously
+      expect(result).toBe(collection)
+
+      // Wait for async operation
+      await Promise.resolve()
+      expect(asyncResult).toBe(6)
+    })
+
+    it('should handle edge cases', () => {
+      // Empty collection
+      const empty = collect<number>([])
+      let emptyCalled = false
+      empty.tap(() => { emptyCalled = true })
+      expect(emptyCalled).toBe(true)
+
+      // Null values
+      const withNull = collect([null, undefined, 1])
+      let nullCount = 0
+      withNull.tap((items) => { nullCount = items.count() })
+      expect(nullCount).toBe(3)
+
+      // Multiple taps
+      let count1 = 0; let count2 = 0
+      collect([1, 2, 3])
+        .tap((items) => { count1 = items.count() })
+        .tap((items) => { count2 = items.sum() })
+      expect(count1).toBe(3)
+      expect(count2).toBe(6)
+    })
+  })
+
+  describe('pipe()', () => {
+    it('should transform collection with callback', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+
+      const result = collection.pipe(items =>
+        items.filter(x => x % 2 === 0).sum(),
+      )
+
+      expect(result).toBe(6) // 2 + 4
+      // Original collection should be unchanged
+      expect(collection.toArray()).toEqual([1, 2, 3, 4, 5])
+    })
+
+    it('should handle complex transformations', () => {
+      interface User {
+        id: number
+        name: string
+        score: number
+      }
+
+      const users = collect<User>([
+        { id: 1, name: 'John', score: 85 },
+        { id: 2, name: 'Jane', score: 92 },
+        { id: 3, name: 'Bob', score: 78 },
+        { id: 4, name: 'Alice', score: 95 },
+      ])
+
+      const result = users.pipe(items => ({
+        averageScore: items.avg('score'),
+        topScorer: items.sortByDesc('score').first()?.name,
+        totalUsers: items.count(),
+        passingUsers: items.filter(user => user.score >= 80).count(),
+      }))
+
+      expect(result).toEqual({
+        averageScore: 87.5,
+        topScorer: 'Alice',
+        totalUsers: 4,
+        passingUsers: 3,
+      })
+    })
+
+    it('should handle async transformations', async () => {
+      const collection = collect([1, 2, 3, 4, 5])
+
+      const result = await collection.pipe(async (items) => {
+        const sum = items.sum()
+        await Promise.resolve()
+        return sum * 2
+      })
+
+      expect(result).toBe(30) // (1+2+3+4+5) * 2
+    })
+
+    it('should handle chainable operations', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+
+      const result = collection.pipe(items =>
+        items
+          .filter(x => x % 2 === 0)
+          .map(x => x * 2)
+          .reduce((acc, curr) => acc + curr, 0),
+      )
+
+      expect(result).toBe(12) // (2 * 2) + (4 * 2)
+    })
+
+    it('should handle edge cases', () => {
+      // Empty collection
+      const empty = collect<number>([])
+      const emptyResult = empty.pipe(items => items.sum())
+      expect(emptyResult).toBe(0)
+
+      // Null values
+      const withNull = collect([null, undefined, 1, 2])
+      const nullResult = withNull.pipe(items =>
+        items.filter(x => x !== null && x !== undefined).count(),
+      )
+      expect(nullResult).toBe(2)
+
+      // Type transformations
+      const numbers = collect([1, 2, 3])
+      const stringResult = numbers.pipe(items =>
+        items.map(n => n.toString()).join(','),
+      )
+      expect(stringResult).toBe('1,2,3')
+
+      // Multiple nested pipes
+      const nestedResult = collect([1, 2, 3]).pipe(items =>
+        items.pipe(nested =>
+          nested.map(n => n * 2),
+        ).sum(),
+      )
+      expect(nestedResult).toBe(12) // (1*2 + 2*2 + 3*2)
+    })
+  })
+})
 
 // describe('Collection Async Operations', () => {
 //   describe('mapAsync()', () => {
