@@ -278,13 +278,77 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     sort(compareFunction?: CompareFunction<T>): CollectionOperations<T> {
+      if (!compareFunction) {
+        const sorted = [...collection.items]
+
+        // Separate items by type
+        const nulls: T[] = []
+        const undefineds: T[] = []
+        const values: T[] = []
+
+        for (const item of sorted) {
+          if (item === null) {
+            nulls.push(item)
+          }
+          else if (item === undefined) {
+            undefineds.push(item)
+          }
+          else {
+            values.push(item)
+          }
+        }
+
+        // Sort regular values
+        values.sort((a: any, b: any) => {
+          if (typeof a === 'number' && typeof b === 'number') {
+            return a - b
+          }
+          return String(a).localeCompare(String(b))
+        })
+
+        // Combine in desired order: nulls, undefineds, sorted values
+        return collect([...nulls, ...undefineds, ...values])
+      }
       return collect([...collection.items].sort(compareFunction))
     },
 
     sortBy<K extends keyof T>(key: K, direction: 'asc' | 'desc' = 'asc'): CollectionOperations<T> {
-      return collect([...collection.items].sort((a, b) => {
-        const multiplier = direction === 'asc' ? 1 : -1
-        return multiplier * (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0)
+      const sorted = [...collection.items]
+
+      if (sorted.length === 0) {
+        return collect(sorted)
+      }
+
+      // Check if any item has a defined value for the key
+      const hasDefinedValues = sorted.some(item =>
+        item?.[key] !== undefined && item[key] !== null,
+      )
+
+      // Return original order if no item has a defined value for the key
+      if (!hasDefinedValues) {
+        return collect(sorted)
+      }
+
+      return collect(sorted.sort((a, b) => {
+        const aVal = a?.[key]
+        const bVal = b?.[key]
+
+        // Handles undefined/null values
+        if (aVal === undefined || aVal === null) {
+          return direction === 'asc' ? -1 : 1;
+        }
+        if (bVal === undefined || bVal === null) {
+          return direction === 'asc' ? 1 : -1;
+        }
+
+        // Sort numbers numerically
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return direction === 'asc' ? aVal - bVal : bVal - aVal
+        }
+
+        // Sort everything else as strings
+        const comparison = String(aVal).localeCompare(String(bVal))
+        return direction === 'asc' ? comparison : -comparison
       }))
     },
 

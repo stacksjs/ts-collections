@@ -862,19 +862,204 @@ describe('Collection Filtering Methods', () => {
   })
 })
 
-// describe('Collection Sorting Methods', () => {
-//   describe('sort()', () => {
-//     it('should sort with compare function', () => expect(true).toBe(true))
-//     it('should sort numbers by default', () => expect(true).toBe(true))
-//     it('should handle empty collection', () => expect(true).toBe(true))
-//   })
+describe('Collection Sorting Methods', () => {
+  describe('sort()', () => {
+    it('should sort with compare function', () => {
+      const numbers = collect([3, 1, 4, 1, 5, 9, 2, 6])
+      const sorted = numbers.sort((a, b) => b - a) // descending
+      expect(sorted.toArray()).toEqual([9, 6, 5, 4, 3, 2, 1, 1])
 
-//   describe('sortBy()', () => {
-//     it('should sort by key ascending', () => expect(true).toBe(true))
-//     it('should sort by key descending', () => expect(true).toBe(true))
-//     it('should handle non-existent key', () => expect(true).toBe(true))
-//   })
-// })
+      // Test with strings
+      const words = collect(['banana', 'apple', 'cherry'])
+      const sortedWords = words.sort((a, b) => a.localeCompare(b))
+      expect(sortedWords.toArray()).toEqual(['apple', 'banana', 'cherry'])
+
+      // Test with objects
+      interface Person {
+        name: string
+        age: number
+      }
+      const people = collect<Person>([
+        { name: 'Alice', age: 30 },
+        { name: 'Bob', age: 25 },
+        { name: 'Charlie', age: 35 },
+      ])
+      const sortedByAge = people.sort((a, b) => a.age - b.age)
+      expect(sortedByAge.first()?.name).toBe('Bob')
+      expect(sortedByAge.last()?.name).toBe('Charlie')
+    })
+
+    it('should sort numbers by default', () => {
+      // Test ascending order
+      const numbers = collect([5, 2, 8, 1, 9])
+      const sorted = numbers.sort()
+      expect(sorted.toArray()).toEqual([1, 2, 5, 8, 9])
+
+      // Test with negative numbers
+      const negatives = collect([3, -1, 4, -2, 7, -5])
+      const sortedNegatives = negatives.sort()
+      expect(sortedNegatives.toArray()).toEqual([-5, -2, -1, 3, 4, 7])
+    })
+
+    it('should handle null and undefined values', () => {
+      const values = collect([null, 3, undefined, 1, null, 2, undefined])
+      const sorted = values.sort()
+      // Nulls and undefineds should be consistently placed at the start
+      expect(sorted.toArray()).toEqual([null, null, undefined, undefined, 1, 2, 3])
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect([])
+      const sorted = empty.sort()
+      expect(sorted.toArray()).toEqual([])
+
+      // Test with compare function
+      const sortedWithCompare = empty.sort((a, b) => a - b)
+      expect(sortedWithCompare.toArray()).toEqual([])
+    })
+
+    it('should handle single element collection', () => {
+      const single = collect([42])
+      const sorted = single.sort()
+      expect(sorted.toArray()).toEqual([42])
+    })
+  })
+
+  describe('sortBy()', () => {
+    interface TestItem {
+      id: number
+      name: string
+      age: number | null
+      score?: number
+      nested?: {
+        value: number
+      }
+    }
+
+    const items: TestItem[] = [
+      { id: 1, name: 'John', age: 30, score: 85 },
+      { id: 2, name: 'Alice', age: 25, score: 92 },
+      { id: 3, name: 'Bob', age: null, score: 78 },
+      { id: 4, name: 'Charlie', age: 35 },
+      { id: 5, name: 'David', age: null },
+      { id: 6, name: 'Eve', age: 28, nested: { value: 100 } },
+    ]
+
+    it('should sort by key ascending', () => {
+      const collection = collect(items)
+
+      // Sort by string
+      const byName = collection.sortBy('name')
+      expect(byName.pluck('name').toArray())
+        .toEqual(['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'John'])
+
+      // Sort by number
+      const byId = collection.sortBy('id')
+      expect(byId.pluck('id').toArray())
+        .toEqual([1, 2, 3, 4, 5, 6])
+
+      // Sort with null values
+      const byAge = collection.sortBy('age')
+      expect(byAge.pluck('age').toArray())
+        .toEqual([null, null, 25, 28, 30, 35])
+    })
+
+    it('should sort by key descending', () => {
+      const collection = collect(items)
+
+      // Sort by string
+      const byName = collection.sortBy('name', 'desc')
+      expect(byName.pluck('name').toArray())
+        .toEqual(['John', 'Eve', 'David', 'Charlie', 'Bob', 'Alice'])
+
+      // Sort by number
+      const byId = collection.sortBy('id', 'desc')
+      expect(byId.pluck('id').toArray())
+        .toEqual([6, 5, 4, 3, 2, 1])
+
+      // Sort with null values
+      const byAge = collection.sortBy('age', 'desc')
+      expect(byAge.pluck('age').toArray())
+        .toEqual([35, 30, 28, 25, null, null])
+    })
+
+    it('should handle non-existent key', () => {
+      const collection = collect(items)
+
+      // Test with undefined key
+      const byUndefinedKey = collection.sortBy('nonexistent' as keyof TestItem)
+      expect(byUndefinedKey.toArray()).toEqual(items)
+
+      // Test with optional property
+      const byScore = collection.sortBy('score')
+      // Undefined values should be at the start when sorting ascending
+      expect(byScore.pluck('score').toArray())
+        .toEqual([undefined, undefined, undefined, 78, 85, 92])
+
+      // Verify descending order as well
+      const byScoreDesc = collection.sortBy('score', 'desc')
+      expect(byScoreDesc.pluck('score').toArray())
+        .toEqual([92, 85, 78, undefined, undefined, undefined])
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect<TestItem>([])
+      const sorted = empty.sortBy('name')
+      expect(sorted.toArray()).toEqual([])
+    })
+
+    it('should handle single element collection', () => {
+      const single = collect([{ id: 1, name: 'John', age: 30 }])
+      const sorted = single.sortBy('name')
+      expect(sorted.toArray()).toEqual([{ id: 1, name: 'John', age: 30 }])
+    })
+
+    it('should preserve original collection', () => {
+      const original = collect(items)
+      const sorted = original.sortBy('name')
+
+      // Original should remain unchanged
+      expect(original.pluck('name').toArray())
+        .toEqual(items.map(item => item.name))
+
+      // Sorted should have new order
+      expect(sorted.pluck('name').toArray())
+        .toEqual(['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'John'])
+    })
+
+    it('should handle nested properties with undefined values', () => {
+      const collection = collect(items)
+      const sorted = collection.sortBy('nested.value' as any)
+
+      // Items without nested value should be placed at the start/end
+      expect(sorted.pluck('name').toArray())
+        .toEqual(['John', 'Alice', 'Bob', 'Charlie', 'David', 'Eve'])
+    })
+  })
+
+  describe('sortByDesc()', () => {
+    it('should be equivalent to sortBy with desc parameter', () => {
+      interface TestItem {
+        id: number
+        name: string
+      }
+
+      const items: TestItem[] = [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Alice' },
+        { id: 3, name: 'Bob' },
+      ]
+
+      const collection = collect(items)
+      const byDesc = collection.sortByDesc('name')
+      const bySort = collection.sortBy('name', 'desc')
+
+      expect(byDesc.toArray()).toEqual(bySort.toArray())
+      expect(byDesc.pluck('name').toArray())
+        .toEqual(['John', 'Bob', 'Alice'])
+    })
+  })
+})
 
 // describe('Collection Set Operations', () => {
 //   describe('unique()', () => {
