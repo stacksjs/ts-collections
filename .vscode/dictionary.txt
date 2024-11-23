@@ -13,6 +13,7 @@ davidanson
 degit
 deps
 destructurable
+dtsx
 entrypoints
 heroicons
 kmeans
