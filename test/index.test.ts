@@ -1,94 +1,635 @@
 import { describe, expect, it } from 'bun:test'
+import { collect } from '../src/collect'
 
 describe('Collection Core Operations', () => {
-  // Basic Collection Creation
   describe('collect()', () => {
-    it('should create collection from array', () => expect(true).toBe(true))
-    it('should create collection from iterable', () => expect(true).toBe(true))
-    it('should handle empty input', () => expect(true).toBe(true))
+    it('should create collection from array', () => {
+      const input = [1, 2, 3]
+      const collection = collect(input)
+
+      expect(collection.toArray()).toEqual(input)
+      expect(collection.count()).toBe(3)
+    })
+
+    it('should create collection from iterable', () => {
+      const input = new Set([1, 2, 3])
+      const collection = collect(input)
+
+      expect(collection.toArray()).toEqual([1, 2, 3])
+      expect(collection.count()).toBe(3)
+    })
+
+    it('should handle empty input', () => {
+      const collection = collect([])
+
+      expect(collection.toArray()).toEqual([])
+      expect(collection.count()).toBe(0)
+      expect(collection.isEmpty()).toBe(true)
+    })
   })
 
-  // Transformation Operations
   describe('map()', () => {
-    it('should transform items with index', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
-    it('should maintain types correctly', () => expect(true).toBe(true))
+    it('should transform items with index', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.map((item, index) => ({
+        value: item,
+        index,
+      }))
+
+      expect(result.toArray()).toEqual([
+        { value: 1, index: 0 },
+        { value: 2, index: 1 },
+        { value: 3, index: 2 },
+      ])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      const result = collection.map(x => x * 2)
+
+      expect(result.toArray()).toEqual([])
+      expect(result.isEmpty()).toBe(true)
+    })
+
+    it('should maintain types correctly', () => {
+      interface User {
+        id: number
+        name: string
+      }
+
+      const users = collect<User>([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+
+      const names = users.map(user => user.name)
+      const ids = users.map(user => user.id)
+
+      expect(names.toArray()).toEqual(['John', 'Jane'])
+      expect(ids.toArray()).toEqual([1, 2])
+    })
   })
 
   describe('filter()', () => {
-    it('should filter items with predicate', () => expect(true).toBe(true))
-    it('should pass index to predicate', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
+    it('should filter items with predicate', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.filter(num => num % 2 === 0)
+
+      expect(result.toArray()).toEqual([2, 4])
+      expect(result.count()).toBe(2)
+    })
+
+    it('should pass index to predicate', () => {
+      const collection = collect(['a', 'b', 'c'])
+      const evenIndices = collection.filter((_, index) => index % 2 === 0)
+
+      expect(evenIndices.toArray()).toEqual(['a', 'c'])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      const result = collection.filter(() => true)
+
+      expect(result.toArray()).toEqual([])
+      expect(result.isEmpty()).toBe(true)
+    })
   })
 
   describe('reduce()', () => {
-    it('should reduce collection with initial value', () => expect(true).toBe(true))
-    it('should pass index to callback', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
+    it('should reduce collection with initial value', () => {
+      const collection = collect([1, 2, 3, 4])
+      const sum = collection.reduce((acc, curr) => acc + curr, 0)
+      const product = collection.reduce((acc, curr) => acc * curr, 1)
+
+      expect(sum).toBe(10)
+      expect(product).toBe(24)
+    })
+
+    it('should pass index to callback', () => {
+      const collection = collect(['a', 'b', 'c'])
+      const result = collection.reduce((acc, curr, index) => {
+        return { ...acc, [curr]: index }
+      }, {} as Record<string, number>)
+
+      expect(result).toEqual({ a: 0, b: 1, c: 2 })
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      const result = collection.reduce((acc, curr) => acc + curr, 0)
+
+      expect(result).toBe(0)
+    })
   })
 
   describe('flatMap()', () => {
-    it('should flatten and map results', () => expect(true).toBe(true))
-    it('should handle nested arrays', () => expect(true).toBe(true))
-    it('should pass index to callback', () => expect(true).toBe(true))
+    it('should flatten and map results', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.flatMap(x => [x, x * 2])
+
+      expect(result.toArray()).toEqual([1, 2, 2, 4, 3, 6])
+    })
+
+    it('should handle nested arrays', () => {
+      const collection = collect([[1, 2], [3, 4], [5, 6]])
+      const result = collection.flatMap(arr => arr)
+
+      expect(result.toArray()).toEqual([1, 2, 3, 4, 5, 6])
+    })
+
+    it('should pass index to callback', () => {
+      const collection = collect(['a', 'b'])
+      const result = collection.flatMap((item, index) => [
+        `${item}-${index}`,
+        `${item}-${index + 1}`,
+      ])
+
+      expect(result.toArray()).toEqual([
+        'a-0',
+        'a-1',
+        'b-1',
+        'b-2',
+      ])
+    })
   })
 })
 
 describe('Collection Element Access', () => {
   describe('first()', () => {
-    it('should return first element', () => expect(true).toBe(true))
-    it('should return undefined for empty collection', () => expect(true).toBe(true))
-    it('should return property when key provided', () => expect(true).toBe(true))
+    it('should return first element', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.first()).toBe(1)
+
+      const stringCollection = collect(['a', 'b', 'c'])
+      expect(stringCollection.first()).toBe('a')
+    })
+
+    it('should return undefined for empty collection', () => {
+      const collection = collect([])
+      expect(collection.first()).toBeUndefined()
+    })
+
+    it('should return property when key provided', () => {
+      interface User {
+        id: number
+        name: string
+        email: string
+      }
+
+      const users = collect<User>([
+        { id: 1, name: 'John', email: 'john@example.com' },
+        { id: 2, name: 'Jane', email: 'jane@example.com' },
+      ])
+
+      expect(users.first('name')).toBe('John')
+      expect(users.first('id')).toBe(1)
+      expect(users.first('email')).toBe('john@example.com')
+
+      // Test with empty collection
+      const emptyUsers = collect<User>([])
+      expect(emptyUsers.first('name')).toBeUndefined()
+    })
   })
 
   describe('last()', () => {
-    it('should return last element', () => expect(true).toBe(true))
-    it('should return undefined for empty collection', () => expect(true).toBe(true))
-    it('should return property when key provided', () => expect(true).toBe(true))
+    it('should return last element', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.last()).toBe(3)
+
+      const stringCollection = collect(['a', 'b', 'c'])
+      expect(stringCollection.last()).toBe('c')
+    })
+
+    it('should return undefined for empty collection', () => {
+      const collection = collect([])
+      expect(collection.last()).toBeUndefined()
+    })
+
+    it('should return property when key provided', () => {
+      interface User {
+        id: number
+        name: string
+        email: string
+      }
+
+      const users = collect<User>([
+        { id: 1, name: 'John', email: 'john@example.com' },
+        { id: 2, name: 'Jane', email: 'jane@example.com' },
+      ])
+
+      expect(users.last('name')).toBe('Jane')
+      expect(users.last('id')).toBe(2)
+      expect(users.last('email')).toBe('jane@example.com')
+
+      // Test with empty collection
+      const emptyUsers = collect<User>([])
+      expect(emptyUsers.last('name')).toBeUndefined()
+    })
   })
 
   describe('nth()', () => {
-    it('should return element at index', () => expect(true).toBe(true))
-    it('should return undefined for out of bounds', () => expect(true).toBe(true))
+    it('should return element at index', () => {
+      const collection = collect(['a', 'b', 'c', 'd', 'e'])
+
+      expect(collection.nth(0)).toBe('a')
+      expect(collection.nth(2)).toBe('c')
+      expect(collection.nth(4)).toBe('e')
+
+      // Test with objects
+      interface Item {
+        value: number
+      }
+      const items = collect<Item>([
+        { value: 10 },
+        { value: 20 },
+        { value: 30 },
+      ])
+      expect(items.nth(1)).toEqual({ value: 20 })
+    })
+
+    it('should return undefined for out of bounds', () => {
+      const collection = collect([1, 2, 3])
+
+      // Test negative index
+      expect(collection.nth(-1)).toBeUndefined()
+
+      // Test index equal to length
+      expect(collection.nth(3)).toBeUndefined()
+
+      // Test index greater than length
+      expect(collection.nth(5)).toBeUndefined()
+
+      // Test with empty collection
+      const emptyCollection = collect([])
+      expect(emptyCollection.nth(0)).toBeUndefined()
+    })
   })
 })
 
 describe('Collection Aggregation Methods', () => {
   describe('sum()', () => {
-    it('should sum numeric values', () => expect(true).toBe(true))
-    it('should sum by key', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
+    it('should sum numeric values', () => {
+      const numbers = collect([1, 2, 3, 4, 5])
+      expect(numbers.sum()).toBe(15)
+
+      const decimals = collect([1.5, 2.25, 3.75])
+      expect(decimals.sum()).toBe(7.5)
+
+      // Should handle mixed numbers
+      const mixed = collect([1, 2.5, 3, 4.75, 5])
+      expect(mixed.sum()).toBe(16.25)
+
+      // Should ignore NaN values
+      const withNaN = collect([1, Number.NaN, 3, 4, Number.NaN])
+      expect(withNaN.sum()).toBe(8)
+    })
+
+    it('should sum by key', () => {
+      interface Product {
+        name: string
+        price: number
+        quantity: number
+      }
+
+      const products = collect<Product>([
+        { name: 'Apple', price: 0.5, quantity: 3 },
+        { name: 'Banana', price: 0.25, quantity: 6 },
+        { name: 'Orange', price: 0.75, quantity: 2 },
+      ])
+
+      expect(products.sum('price')).toBe(1.5)
+      expect(products.sum('quantity')).toBe(11)
+
+      // Test with nested NaN values
+      const withNaN = collect<Product>([
+        { name: 'Apple', price: Number.NaN, quantity: 3 },
+        { name: 'Banana', price: 0.25, quantity: 6 },
+        { name: 'Orange', price: 0.75, quantity: Number.NaN },
+      ])
+
+      expect(withNaN.sum('price')).toBe(1)
+      expect(withNaN.sum('quantity')).toBe(9)
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect([])
+      expect(empty.sum()).toBe(0)
+
+      interface Item {
+        value: number
+      }
+      const emptyObjects = collect<Item>([])
+      expect(emptyObjects.sum('value')).toBe(0)
+    })
   })
 
   describe('avg()', () => {
-    it('should calculate average of numbers', () => expect(true).toBe(true))
-    it('should calculate average by key', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
+    it('should calculate average of numbers', () => {
+      const numbers = collect([2, 4, 6, 8, 10])
+      expect(numbers.avg()).toBe(6)
+
+      const decimals = collect([1.5, 2.5, 3.5])
+      expect(decimals.avg()).toBe(2.5)
+
+      // Should handle mixed numbers
+      const mixed = collect([1, 2.5, 3, 4.75, 5])
+      expect(mixed.avg()).toBe(3.25)
+
+      // NaN values are counted in length but treated as 0
+      const withNaN = collect([1, Number.NaN, 3, 4, Number.NaN])
+      expect(withNaN.avg()).toBe(1.6) // (1 + 0 + 3 + 4 + 0) / 5 = 1.6
+    })
+
+    it('should calculate average by key', () => {
+      interface Score {
+        student: string
+        math: number
+        science: number
+      }
+
+      const scores = collect<Score>([
+        { student: 'John', math: 90, science: 85 },
+        { student: 'Jane', math: 95, science: 92 },
+        { student: 'Bob', math: 88, science: 78 },
+      ])
+
+      expect(scores.avg('math')).toBe(91)
+      expect(scores.avg('science')).toBe(85)
+
+      // NaN values are counted in length but treated as 0
+      const withNaN = collect<Score>([
+        { student: 'John', math: Number.NaN, science: 85 },
+        { student: 'Jane', math: 95, science: 92 },
+        { student: 'Bob', math: 88, science: Number.NaN },
+      ])
+
+      expect(withNaN.avg('math')).toBe(61) // (0 + 95 + 88) / 3 = 61
+      expect(withNaN.avg('science')).toBe(59) // (85 + 92 + 0) / 3 = 59
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect([])
+      expect(empty.avg()).toBe(0)
+
+      interface Item {
+        value: number
+      }
+      const emptyObjects = collect<Item>([])
+      expect(emptyObjects.avg('value')).toBe(0)
+    })
   })
 
   describe('median()', () => {
-    it('should find median of odd length collection', () => expect(true).toBe(true))
-    it('should find median of even length collection', () => expect(true).toBe(true))
-    it('should find median by key', () => expect(true).toBe(true))
+    it('should find median of odd length collection', () => {
+      const numbers = collect([1, 2, 3, 4, 5])
+      expect(numbers.median()).toBe(3)
+
+      const unsorted = collect([5, 3, 1, 2, 4])
+      expect(unsorted.median()).toBe(3)
+
+      const decimals = collect([1.5, 2.5, 3.5, 4.5, 5.5])
+      expect(decimals.median()).toBe(3.5)
+    })
+
+    it('should find median of even length collection', () => {
+      const numbers = collect([1, 2, 3, 4])
+      expect(numbers.median()).toBe(2.5)
+
+      const unsorted = collect([4, 1, 3, 2])
+      expect(numbers.median()).toBe(2.5)
+
+      const decimals = collect([1.5, 2.5, 3.5, 4.5])
+      expect(decimals.median()).toBe(3)
+    })
+
+    it('should find median by key', () => {
+      interface Purchase {
+        product: string
+        amount: number
+      }
+
+      // Odd length
+      const oddPurchases = collect<Purchase>([
+        { product: 'A', amount: 10 },
+        { product: 'B', amount: 20 },
+        { product: 'C', amount: 30 },
+        { product: 'D', amount: 40 },
+        { product: 'E', amount: 50 },
+      ])
+      expect(oddPurchases.median('amount')).toBe(30)
+
+      // Even length
+      const evenPurchases = collect<Purchase>([
+        { product: 'A', amount: 10 },
+        { product: 'B', amount: 20 },
+        { product: 'C', amount: 30 },
+        { product: 'D', amount: 40 },
+      ])
+      expect(evenPurchases.median('amount')).toBe(25)
+
+      // Unsorted data
+      const unsortedPurchases = collect<Purchase>([
+        { product: 'A', amount: 40 },
+        { product: 'B', amount: 10 },
+        { product: 'C', amount: 30 },
+        { product: 'D', amount: 20 },
+        { product: 'E', amount: 50 },
+      ])
+      expect(unsortedPurchases.median('amount')).toBe(30)
+
+      // Empty collection
+      const emptyPurchases = collect<Purchase>([])
+      expect(emptyPurchases.median('amount')).toBeUndefined()
+    })
   })
 })
 
 describe('Collection Grouping Operations', () => {
   describe('chunk()', () => {
-    it('should create chunks of specified size', () => expect(true).toBe(true))
-    it('should handle remainder chunk', () => expect(true).toBe(true))
-    it('should throw for invalid chunk size', () => expect(true).toBe(true))
+    it('should create chunks of specified size', () => {
+      const numbers = collect([1, 2, 3, 4, 5, 6])
+      const chunks = numbers.chunk(2)
+
+      expect(chunks.toArray()).toEqual([
+        [1, 2],
+        [3, 4],
+        [5, 6],
+      ])
+
+      // Test with different size
+      const chunks3 = numbers.chunk(3)
+      expect(chunks3.toArray()).toEqual([
+        [1, 2, 3],
+        [4, 5, 6],
+      ])
+    })
+
+    it('should handle remainder chunk', () => {
+      const numbers = collect([1, 2, 3, 4, 5])
+
+      // Chunk size 2 with remainder
+      const chunks2 = numbers.chunk(2)
+      expect(chunks2.toArray()).toEqual([
+        [1, 2],
+        [3, 4],
+        [5],
+      ])
+
+      // Chunk size 3 with remainder
+      const chunks3 = numbers.chunk(3)
+      expect(chunks3.toArray()).toEqual([
+        [1, 2, 3],
+        [4, 5],
+      ])
+
+      // Chunk size larger than array
+      const chunksLarge = numbers.chunk(10)
+      expect(chunksLarge.toArray()).toEqual([[1, 2, 3, 4, 5]])
+    })
+
+    it('should throw for invalid chunk size', () => {
+      const numbers = collect([1, 2, 3, 4, 5])
+
+      expect(() => numbers.chunk(0)).toThrow('Chunk size must be greater than 0')
+      expect(() => numbers.chunk(-1)).toThrow('Chunk size must be greater than 0')
+    })
   })
 
   describe('groupBy()', () => {
-    it('should group by key', () => expect(true).toBe(true))
-    it('should group by callback', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
+    it('should group by key', () => {
+      interface User {
+        role: string
+        name: string
+        active: boolean
+      }
+
+      const users = collect<User>([
+        { role: 'admin', name: 'John', active: true },
+        { role: 'user', name: 'Jane', active: true },
+        { role: 'admin', name: 'Mike', active: false },
+        { role: 'user', name: 'Lisa', active: true },
+      ])
+
+      const groupedByRole = users.groupBy('role')
+
+      expect(Array.from(groupedByRole.get('admin')?.toArray() || [])).toEqual([
+        { role: 'admin', name: 'John', active: true },
+        { role: 'admin', name: 'Mike', active: false },
+      ])
+
+      expect(Array.from(groupedByRole.get('user')?.toArray() || [])).toEqual([
+        { role: 'user', name: 'Jane', active: true },
+        { role: 'user', name: 'Lisa', active: true },
+      ])
+
+      // Group by boolean field
+      const groupedByActive = users.groupBy('active')
+      expect(Array.from(groupedByActive.get(true)?.toArray() || [])).toHaveLength(3)
+      expect(Array.from(groupedByActive.get(false)?.toArray() || [])).toHaveLength(1)
+    })
+
+    it('should group by callback', () => {
+      const numbers = collect([1, 2, 3, 4, 5, 6])
+      const grouped = numbers.groupBy(num => num % 2 === 0 ? 'even' : 'odd')
+
+      expect(Array.from(grouped.get('even')?.toArray() || [])).toEqual([2, 4, 6])
+      expect(Array.from(grouped.get('odd')?.toArray() || [])).toEqual([1, 3, 5])
+
+      // More complex callback
+      interface Person {
+        name: string
+        age: number
+      }
+
+      const people = collect<Person>([
+        { name: 'John', age: 25 },
+        { name: 'Jane', age: 32 },
+        { name: 'Bob', age: 18 },
+        { name: 'Alice', age: 45 },
+      ])
+
+      const groupedByAgeRange = people.groupBy((person) => {
+        if (person.age < 20)
+          return 'teenager'
+        if (person.age < 30)
+          return 'twenties'
+        if (person.age < 40)
+          return 'thirties'
+        return 'forties+'
+      })
+
+      expect(Array.from(groupedByAgeRange.get('teenager')?.toArray() || [])).toHaveLength(1)
+      expect(Array.from(groupedByAgeRange.get('twenties')?.toArray() || [])).toHaveLength(1)
+      expect(Array.from(groupedByAgeRange.get('thirties')?.toArray() || [])).toHaveLength(1)
+      expect(Array.from(groupedByAgeRange.get('forties+')?.toArray() || [])).toHaveLength(1)
+    })
+
+    it('should handle empty collection', () => {
+      interface User {
+        role: string
+        name: string
+      }
+
+      const emptyCollection = collect<User>([])
+      const groupedByKey = emptyCollection.groupBy('role')
+      const groupedByCallback = emptyCollection.groupBy(user => user.role)
+
+      expect(groupedByKey.size).toBe(0)
+      expect(groupedByCallback.size).toBe(0)
+    })
   })
 
   describe('partition()', () => {
-    it('should split collection by predicate', () => expect(true).toBe(true))
-    it('should handle empty collection', () => expect(true).toBe(true))
+    it('should split collection by predicate', () => {
+      const numbers = collect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+      const [evens, odds] = numbers.partition(num => num % 2 === 0)
+
+      expect(evens.toArray()).toEqual([2, 4, 6, 8, 10])
+      expect(odds.toArray()).toEqual([1, 3, 5, 7, 9])
+
+      // Test with objects
+      interface User {
+        name: string
+        active: boolean
+      }
+
+      const users = collect<User>([
+        { name: 'John', active: true },
+        { name: 'Jane', active: false },
+        { name: 'Bob', active: true },
+        { name: 'Alice', active: false },
+      ])
+
+      const [active, inactive] = users.partition(user => user.active)
+      expect(active.toArray()).toEqual([
+        { name: 'John', active: true },
+        { name: 'Bob', active: true },
+      ])
+      expect(inactive.toArray()).toEqual([
+        { name: 'Jane', active: false },
+        { name: 'Alice', active: false },
+      ])
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect([])
+      const [truthy, falsy] = empty.partition(item => Boolean(item))
+
+      expect(truthy.toArray()).toEqual([])
+      expect(falsy.toArray()).toEqual([])
+
+      // Test with typed empty collection
+      interface User {
+        name: string
+        active: boolean
+      }
+
+      const emptyUsers = collect<User>([])
+      const [active, inactive] = emptyUsers.partition(user => user.active)
+
+      expect(active.toArray()).toEqual([])
+      expect(inactive.toArray()).toEqual([])
+    })
   })
 })
 
