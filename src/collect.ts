@@ -66,9 +66,15 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(collection.items.flatMap(callback))
     },
 
-    first<K extends keyof T>(key?: K): T | T[K] | undefined {
+    first: function <K extends keyof T>(key?: K): T | T[K] | undefined {
       const item = collection.items[0]
-      return key && item ? item[key] : item
+      if (arguments.length === 0) {
+        return item
+      }
+      return item ? item[key!] : undefined
+    } as {
+      (): T | undefined
+      <K extends keyof T>(key: K): T[K] | undefined
     },
 
     last<K extends keyof T>(key?: K): T | T[K] | undefined {

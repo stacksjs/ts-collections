@@ -215,7 +215,10 @@ export interface CollectionOperations<T> extends Collection<T> {
   someAsync: (callback: AsyncCallback<T, boolean>) => Promise<boolean>
 
   // Accessing Elements
-  first: <K extends keyof T>(key?: K) => T | T[K] | undefined
+  // eslint-disable-next-line ts/method-signature-style
+  first(): T | undefined
+  // eslint-disable-next-line ts/method-signature-style
+  first<K extends keyof T>(key: K): T[K] | undefined
   last: <K extends keyof T>(key?: K) => T | T[K] | undefined
   nth: (index: number) => T | undefined
   take: (count: number) => CollectionOperations<T>
