@@ -313,20 +313,20 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       // Find added items (present in version2 but not in version1)
       const addedItems = snapshot2.items.filter(item2 =>
         !snapshot1.items.some(item1 =>
-          JSON.stringify(item1) === JSON.stringify(item2)
-        )
+          JSON.stringify(item1) === JSON.stringify(item2),
+        ),
       )
 
       // Find removed items (present in version1 but not in version2)
       const removedItems = snapshot1.items.filter(item1 =>
         !snapshot2.items.some(item2 =>
-          JSON.stringify(item1) === JSON.stringify(item2)
-        )
+          JSON.stringify(item1) === JSON.stringify(item2),
+        ),
       )
 
       // Find updated items (have the same keys but different values)
       const updatedItems = snapshot2.items.filter(item2 =>
-        snapshot1.items.some(item1 => {
+        snapshot1.items.some((item1) => {
           // Properly type cast the objects for Object.keys
           const item1Obj = item1 as Record<string, unknown>
           const item2Obj = item2 as Record<string, unknown>
@@ -335,47 +335,47 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           const item2Keys = Object.keys(item2Obj)
 
           // Check if items have the same keys
-          const sameKeys = item1Keys.length === item2Keys.length &&
-            item1Keys.every(key => item2Keys.includes(key))
+          const sameKeys = item1Keys.length === item2Keys.length
+            && item1Keys.every(key => item2Keys.includes(key))
 
           // Check if any values are different
           const hasChanges = sameKeys && item1Keys.some(key =>
-            JSON.stringify(item1Obj[key]) !== JSON.stringify(item2Obj[key])
+            JSON.stringify(item1Obj[key]) !== JSON.stringify(item2Obj[key]),
           )
 
           return sameKeys && hasChanges
-        })
+        }),
       )
 
       // Record all changes with their types
-      addedItems.forEach(item => {
+      addedItems.forEach((item) => {
         changes.push({
           type: 'add',
-          item
+          item,
         })
       })
 
-      removedItems.forEach(item => {
+      removedItems.forEach((item) => {
         changes.push({
           type: 'delete',
-          item
+          item,
         })
       })
 
-      updatedItems.forEach(item => {
+      updatedItems.forEach((item) => {
         // Find the previous version of this item
         const itemObj = item as Record<string, unknown>
-        const previousItem = snapshot1.items.find(item1 => {
+        const previousItem = snapshot1.items.find((item1) => {
           const item1Obj = item1 as Record<string, unknown>
           return Object.keys(item1Obj).every(key =>
-            Object.keys(itemObj).includes(key)
+            Object.keys(itemObj).includes(key),
           )
         })
 
         changes.push({
           type: 'update',
           item,
-          previousItem
+          previousItem,
         })
       })
 
@@ -383,7 +383,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       const versionInfo: VersionInfo<T>[] = [{
         version: Math.max(version1, version2),
         timestamp: new Date(),
-        changes
+        changes,
       }]
 
       return collect(versionInfo)

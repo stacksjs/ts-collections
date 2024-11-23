@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'bun:test'
 
-import { collect } from './collect'
-
 describe('Collection Core Operations', () => {
   // Basic Collection Creation
   describe('collect()', () => {
