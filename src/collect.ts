@@ -77,9 +77,15 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       <K extends keyof T>(key: K): T[K] | undefined
     },
 
-    last<K extends keyof T>(key?: K): T | T[K] | undefined {
+    last: function <K extends keyof T>(key?: K): T | T[K] | undefined {
       const item = collection.items[collection.length - 1]
-      return key && item ? item[key] : item
+      if (arguments.length === 0) {
+        return item
+      }
+      return item ? item[key!] : undefined
+    } as {
+      (): T | undefined
+      <K extends keyof T>(key: K): T[K] | undefined
     },
 
     nth(index: number): T | undefined {
