@@ -474,11 +474,6 @@ export interface CollectionOperations<T> extends Collection<T> {
     memory: Record<string, number>
     complexity: Record<string, string>
   }>
-  lint: () => Array<{
-    type: 'warning' | 'error'
-    message: string
-    suggestion?: string
-  }>
 
   // Advanced Mathematical Operations
   /**

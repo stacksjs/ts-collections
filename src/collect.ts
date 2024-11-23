@@ -2149,25 +2149,6 @@ ${collection.items.map(item =>
       return this
     },
 
-    lint(): Array<{ type: 'warning' | 'error', message: string, suggestion?: string }> {
-      const issues: Array<{ type: 'warning' | 'error', message: string, suggestion?: string }> = []
-
-      // Check for null values
-      for (const item of this.items) {
-        for (const [key, value] of Object.entries(item as object)) {
-          if (value === null) {
-            issues.push({
-              type: 'warning',
-              message: `Null value found in field "${key}"`,
-              suggestion: 'Consider using undefined or providing a default value',
-            })
-          }
-        }
-      }
-
-      return issues
-    },
-
     sentiment(this: CollectionOperations<string>): CollectionOperations<{ score: number, comparative: number }> {
       // Basic sentiment analysis using a simple positive/negative word approach
       const positiveWords = new Set(['good', 'great', 'awesome', 'excellent', 'happy', 'love'])
