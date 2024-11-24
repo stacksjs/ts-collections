@@ -203,7 +203,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   flatMap: <U>(callback: (item: T, index: number) => U[]) => CollectionOperations<U>
 
   // Advanced Transformations
-  mapToGroups: <K extends keyof T, V>(callback: (item: T) => [K, V]) => Map<K, CollectionOperations<V>>
+  mapToGroups: <K extends keyof T | string | number, V>(callback: (item: T) => [K, V]) => Map<K, CollectionOperations<V>>
   mapSpread: <U>(callback: (...args: any[]) => U) => CollectionOperations<U>
   mapUntil: <U>(callback: (item: T, index: number) => U, predicate: (item: U) => boolean) => CollectionOperations<U>
 

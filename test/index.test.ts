@@ -2756,27 +2756,232 @@ describe('Collection Performance Features', () => {
   })
 })
 
-// describe('Advanced Transformations', () => {
-//   describe('mapToGroups()', () => {
-//     it('should map items to groups', () => expect(true).toBe(true))
-//     it('should handle complex group mappings', () => expect(true).toBe(true))
-//   })
+describe('Advanced Transformations', () => {
+  describe('mapToGroups()', () => {
+    it('should map items to groups', () => {
+      type ItemType = 'fruit' | 'vegetable'
 
-//   describe('mapSpread()', () => {
-//     it('should spread arguments to callback', () => expect(true).toBe(true))
-//     it('should handle arrays and objects', () => expect(true).toBe(true))
-//   })
+      interface Item {
+        id: number
+        type: ItemType
+        name: string
+      }
 
-//   describe('mapUntil()', () => {
-//     it('should map until predicate is true', () => expect(true).toBe(true))
-//     it('should handle early termination', () => expect(true).toBe(true))
-//   })
+      const data: Item[] = [
+        { id: 1, type: 'fruit', name: 'apple' },
+        { id: 2, type: 'fruit', name: 'banana' },
+        { id: 3, type: 'vegetable', name: 'carrot' },
+        { id: 4, type: 'vegetable', name: 'potato' },
+      ]
 
-//   describe('mapOption()', () => {
-//     it('should filter out null/undefined values', () => expect(true).toBe(true))
-//     it('should transform remaining values', () => expect(true).toBe(true))
-//   })
-// })
+      const result = collect(data).mapToGroups<ItemType, string>(item => [
+        item.type,
+        item.name,
+      ])
+
+      // Check the result is a Map
+      expect(result instanceof Map).toBe(true)
+
+      // Check group contents
+      const fruits = result.get('fruit')?.toArray()
+      const vegetables = result.get('vegetable')?.toArray()
+
+      expect(fruits).toEqual(['apple', 'banana'])
+      expect(vegetables).toEqual(['carrot', 'potato'])
+    })
+
+    it('should handle complex group mappings', () => {
+      interface GradeData {
+        id: number
+        score: number
+        grade: string
+      }
+
+      interface ResultItem {
+        id: number
+        grade: string
+      }
+
+      const data: GradeData[] = [
+        { id: 1, score: 95, grade: 'A' },
+        { id: 2, score: 85, grade: 'B' },
+        { id: 3, score: 95, grade: 'A' },
+        { id: 4, score: 75, grade: 'C' },
+      ]
+
+      const result = collect(data).mapToGroups<number, ResultItem>(item => [
+        item.score,
+        { id: item.id, grade: item.grade },
+      ])
+
+      // Check scores are grouped correctly
+      const score95Group = result.get(95)?.toArray()
+      expect(score95Group).toEqual([
+        { id: 1, grade: 'A' },
+        { id: 3, grade: 'A' },
+      ])
+
+      // Check all groups exist
+      expect(result.has(85)).toBe(true)
+      expect(result.has(75)).toBe(true)
+      expect(result.size).toBe(3)
+    })
+  })
+
+  describe('mapSpread()', () => {
+    describe('mapSpread()', () => {
+      it('should spread arguments to callback', () => {
+        const data = [
+          [1, 'a', true],
+          [2, 'b', false],
+          [3, 'c', true],
+        ]
+
+        const result = collect(data).mapSpread((num, str, bool) => ({
+          number: num,
+          string: str,
+          boolean: bool,
+        }))
+
+        expect(result.toArray()).toEqual([
+          { number: 1, string: 'a', boolean: true },
+          { number: 2, string: 'b', boolean: false },
+          { number: 3, string: 'c', boolean: true },
+        ])
+      })
+
+      it('should handle arrays and objects', () => {
+        // Test with objects
+        const objectData = [
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+          { x: 5, y: 6 },
+        ]
+
+        const objectResult = collect(objectData).mapSpread(item => item.x + item.y)
+        expect(objectResult.toArray()).toEqual([3, 7, 11])
+
+        // Test with mixed arrays
+        interface NameRecord { name: { age: number } }
+        interface TitleRecord { title: { level: string } }
+        type ResultType = NameRecord | TitleRecord
+
+        const mixedData = [
+          ['name', { age: 25 }] as ['name', { age: number }],
+          ['title', { level: 'senior' }] as ['title', { level: string }],
+        ]
+
+        const mixedResult = collect(mixedData).mapSpread<ResultType>((key, value) => {
+          if (key === 'name') {
+            return { name: value as { age: number } }
+          }
+          else {
+            return { title: value as { level: string } }
+          }
+        })
+
+        expect(mixedResult.toArray()).toEqual([
+          { name: { age: 25 } },
+          { title: { level: 'senior' } },
+        ])
+      })
+    })
+  })
+
+  describe('mapUntil()', () => {
+    it('should map until predicate is true', () => {
+      const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+      const result = collect(data).mapUntil(
+        num => num * 2,
+        doubled => doubled > 10,
+      )
+
+      expect(result.toArray()).toEqual([2, 4, 6, 8, 10])
+    })
+
+    it('should handle early termination', () => {
+      const data = [
+        { id: 1, status: 'pending' },
+        { id: 2, status: 'failed' },
+        { id: 3, status: 'pending' },
+        { id: 4, status: 'completed' },
+      ]
+
+      // Mock function to track calls
+      const processingFn = mock().mockImplementation(item => ({
+        ...item,
+        processed: true,
+      }))
+
+      const result = collect(data).mapUntil(
+        (item) => {
+          processingFn(item)
+          return { ...item, processed: true }
+        },
+        item => item.status === 'failed',
+      )
+
+      // Should only process until the failed status is encountered
+      expect(result.toArray()).toEqual([
+        { id: 1, status: 'pending', processed: true },
+      ])
+
+      // Verify the processing function was only called once
+      expect(processingFn).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('mapOption()', () => {
+    it('should filter out null/undefined values', () => {
+      const data = [
+        { id: 1, value: 'valid' },
+        { id: 2, value: null },
+        { id: 3, value: undefined },
+        { id: 4, value: 'valid' },
+        { id: 5, value: '' },
+      ]
+
+      const result = collect(data).mapOption(item => item.value)
+
+      expect(result.toArray()).toEqual(['valid', 'valid', ''])
+    })
+
+    it('should transform remaining values', () => {
+      interface User {
+        id: number
+        email?: string | null
+      }
+
+      const users: User[] = [
+        { id: 1, email: 'user1@example.com' },
+        { id: 2, email: null },
+        { id: 3, email: undefined },
+        { id: 4, email: 'user4@example.com' },
+      ]
+
+      const result = collect(users).mapOption((user) => {
+        if (!user.email)
+          return null
+        return {
+          id: user.id,
+          emailDomain: user.email.split('@')[1],
+        }
+      })
+
+      expect(result.toArray()).toEqual([
+        { id: 1, emailDomain: 'example.com' },
+        { id: 4, emailDomain: 'example.com' },
+      ])
+
+      // Test with type narrowing
+      const numberResult = collect([1, null, 3, undefined, 5])
+        .mapOption(num => num ? num * 2 : null)
+
+      expect(numberResult.toArray()).toEqual([2, 6, 10])
+    })
+  })
+})
 
 // describe('String Operations', () => {
 //   describe('join()', () => {

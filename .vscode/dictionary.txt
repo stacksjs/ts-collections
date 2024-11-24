@@ -17,6 +17,7 @@ dtsx
 entrypoints
 heroicons
 kmeans
+Laravel
 lockb
 ngrams
 openweb

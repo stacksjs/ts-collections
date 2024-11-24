@@ -1465,7 +1465,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return createLazyOperations(collectionGenerator(collection.items))
     },
 
-    mapToGroups<K extends keyof T, V>(callback: (item: T) => [K, V]): Map<K, CollectionOperations<V>> {
+    mapToGroups<K extends keyof T | string | number, V>(callback: (item: T) => [K, V]): Map<K, CollectionOperations<V>> {
       const groups = new Map<K, V[]>()
       for (const item of collection.items) {
         const [key, value] = callback(item)
