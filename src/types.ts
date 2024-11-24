@@ -200,10 +200,13 @@ export interface CollectionOperations<T> extends Collection<T> {
   all: () => T[]
   average: (key?: keyof T) => number // alias for avg
   collapse: () => CollectionOperations<T extends Array<infer U> ? U : T>
-  combine: <U>(values: U[]) => CollectionOperations<Record<string, U>>
+  combine: <U>(values: U[]) => CollectionOperations<Record<string, U | undefined>>
   contains: ((item: T) => boolean) & (<K extends keyof T>(key: K, value: T[K]) => boolean)
   containsOneItem: () => boolean
-  countBy: <K extends keyof T>(key: K) => Map<T[K], number>
+  countBy: {
+    <K extends keyof T>(key: K): Map<T[K], number>
+    <U extends string | number>(callback: (item: T) => U): Map<U, number>
+  }
   diffAssoc: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
   diffKeys: <K extends keyof T>(other: Record<K, T[K]>[]) => CollectionOperations<T>
   diffUsing: (other: T[], callback: (a: T, b: T) => number) => CollectionOperations<T>
@@ -225,9 +228,13 @@ export interface CollectionOperations<T> extends Collection<T> {
   macro: (name: string, callback: (...args: any[]) => any) => void
   make: <U>(items: U[]) => CollectionOperations<U>
   mapInto: <U extends Record<string, any>>(constructor: new () => U) => CollectionOperations<U>
-  mapToDictionary: <K extends keyof T>(callback: (item: T) => [K, T[K]]) => Map<K, T[K]>
-  mapWithKeys: <K extends keyof T, V>(callback: (item: T) => [K, V]) => Map<K, V>
-  merge: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  mapToDictionary: <K extends string | number | symbol, V>(
+    callback: (item: T) => [K, V]
+  ) => Map<K, V>
+  mapWithKeys: <K extends string | number | symbol, V>(
+    callback: (item: T) => [K, V]
+  ) => Map<K, V>
+  merge: <U extends T>(other: U[] | CollectionOperations<U>) => CollectionOperations<T | U>
   mergeRecursive: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
   only: <K extends keyof T>(...keys: K[]) => CollectionOperations<Pick<T, K>>
   pad: (size: number, value: T) => CollectionOperations<T>

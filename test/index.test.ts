@@ -1,3 +1,4 @@
+import type { CollectionOperations } from '../src/types'
 import { afterEach, describe, expect, it, mock, setSystemTime } from 'bun:test'
 import { Buffer } from 'node:buffer'
 import { collect } from '../src/collect'
@@ -257,7 +258,9 @@ describe('Collection Core Operations', () => {
 
     it('should handle empty collection', () => {
       const collection = collect([])
+      // @ts-expect-error Testing invalid types
       expect(collection.contains(1)).toBe(false)
+      // @ts-expect-error Testing invalid types
       expect(collection.contains('id', 1)).toBe(false)
     })
   })
@@ -326,6 +329,7 @@ describe('Collection Core Operations', () => {
     it('should handle empty collections', () => {
       const collection = collect([])
       expect(collection.diffAssoc([]).toArray()).toEqual([])
+      // @ts-expect-error Testing invalid with types
       expect(collection.diffAssoc([1, 2]).toArray()).toEqual([])
     })
   })
@@ -398,7 +402,9 @@ describe('Collection Core Operations', () => {
 
     it('should handle empty collection', () => {
       const collection = collect([])
+      // @ts-expect-error Testing invalid types
       expect(collection.doesntContain(1)).toBe(true)
+      // @ts-expect-error Testing invalid types
       expect(collection.doesntContain('any', 'value')).toBe(true)
     })
   })
@@ -501,6 +507,7 @@ describe('Collection Core Operations', () => {
 
     it('should handle non-existent keys', () => {
       const collection = collect([{ a: 1, b: 2 }])
+      // @ts-expect-error Testing invalid types
       const result = collection.except('c')
       expect(result.toArray()).toEqual([{ a: 1, b: 2 }])
     })
@@ -537,6 +544,7 @@ describe('Collection Core Operations', () => {
 
     it('should handle empty collection', () => {
       const collection = collect([])
+      // @ts-expect-error Testing with invalid types
       expect(collection.firstWhere('any', true)).toBeUndefined()
     })
   })
@@ -614,6 +622,7 @@ describe('Collection Core Operations', () => {
 
     it('should handle non-existent keys', () => {
       const collection = collect([{ a: 1 }])
+      // @ts-expect-error Testing with invalid type
       expect(collection.forget('b').first()).toEqual({ a: 1 })
     })
 
@@ -634,6 +643,7 @@ describe('Collection Core Operations', () => {
 
     it('should return default value if key not found', () => {
       const collection = collect([{ a: 1 }])
+      // @ts-expect-error Testing with invalid type
       expect(collection.get('b', 'default')).toBe('default')
     })
 
@@ -650,6 +660,7 @@ describe('Collection Core Operations', () => {
         { id: 2 },
       ])
       expect(collection.has('name')).toBe(true)
+      // @ts-expect-error Testing with invalid type
       expect(collection.has('age')).toBe(false)
     })
 
@@ -693,16 +704,16 @@ describe('Collection Core Operations', () => {
   describe('macro()', () => {
     it('should add custom method to collection', () => {
       const collection = collect([1, 2, 3])
-      collection.macro('double', function () {
-        return this.map(x => x * 2)
+      collection.macro('double', function (this: CollectionOperations<number>) {
+        return this.map((x: number) => x * 2)
       })
       expect((collection as any).double().toArray()).toEqual([2, 4, 6])
     })
 
     it('should handle method with arguments', () => {
       const collection = collect([1, 2, 3])
-      collection.macro('multiplyBy', function (factor: number) {
-        return this.map(x => x * factor)
+      collection.macro('multiplyBy', function (this: CollectionOperations<number>, factor: number) {
+        return this.map((x: number) => x * factor)
       })
       expect((collection as any).multiplyBy(3).toArray()).toEqual([3, 6, 9])
     })
@@ -817,7 +828,20 @@ describe('Collection Core Operations', () => {
     it('should handle empty collections', () => {
       const collection = collect([1, 2])
       expect(collection.merge([]).toArray()).toEqual([1, 2])
-      expect(collect([]).merge([1, 2]).toArray()).toEqual([1, 2])
+      expect(collect<number>([]).merge([1, 2]).toArray()).toEqual([1, 2])
+    })
+
+    it('should merge collections', () => {
+      const collection = collect([1, 2])
+      const result = collection.merge([3, 4])
+      expect(result.toArray()).toEqual([1, 2, 3, 4])
+    })
+
+    it('should merge collection operations', () => {
+      const collection = collect([1, 2])
+      const other = collect([3, 4])
+      const result = collection.merge(other)
+      expect(result.toArray()).toEqual([1, 2, 3, 4])
     })
   })
 

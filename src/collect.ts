@@ -8,6 +8,14 @@ import { getNextTimestamp, isSameDay } from './utils'
  * @param items - Array of items or iterable
  */
 export function collect<T>(items: T[] | Iterable<T>): CollectionOperations<T> {
+  // Handle empty array case explicitly
+  if (Array.isArray(items) && items.length === 0) {
+    return createCollectionOperations({
+      items: [] as any[],
+      length: 0,
+    })
+  }
+
   const array = Array.isArray(items) ? items : Array.from(items)
   return createCollectionOperations({
     items: array,
@@ -54,8 +62,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(collection.items.flat() as U[])
     },
 
-    combine<U>(values: U[]) {
-      const result: Record<string, U> = {}
+    combine<U>(values: U[]): CollectionOperations<Record<string, U | undefined>> {
+      const result: Record<string, U | undefined> = {}
       collection.items.forEach((key, index) => {
         result[String(key)] = values[index]
       })
@@ -73,14 +81,15 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collection.length === 1
     },
 
-    countBy<K extends keyof T>(key: K | ((item: T) => T[K])): Map<T[K], number> {
-      const counts = new Map<T[K], number>()
+    countBy<K extends keyof T | string | number>(
+      keyOrCallback: K | ((item: T) => K extends keyof T ? T[K] : string | number),
+    ): Map<any, number> {
+      const counts = new Map<any, number>()
 
       for (const item of collection.items) {
-        // Handle both key string and callback function
-        const value = typeof key === 'function'
-          ? (key as (item: T) => T[K])(item)
-          : item[key as K]
+        const value = typeof keyOrCallback === 'function'
+          ? (keyOrCallback as (item: T) => string | number)(item)
+          : item[keyOrCallback as keyof T]
 
         counts.set(value, (counts.get(value) || 0) + 1)
       }
@@ -241,9 +250,14 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       )
     },
 
-    macro(name: string, callback: (...args: any[]) => any): void {
+    macro<Args extends any[]>(
+      name: string,
+      callback: (this: CollectionOperations<T>, ...args: Args) => CollectionOperations<any>,
+    ): void {
       Object.defineProperty(this, name, {
-        value: callback.bind(this),
+        value(this: CollectionOperations<T>, ...args: Args) {
+          return callback.apply(this, args)
+        },
         enumerable: false,
         configurable: true,
         writable: true,
@@ -260,16 +274,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       ) as unknown as CollectionOperations<U>
     },
 
-    mapToDictionary<K extends keyof T>(callback: (item: T) => [K, T[K]]) {
-      const map = new Map<K, T[K]>()
-      collection.items.forEach((item) => {
-        const [key, value] = callback(item)
-        map.set(key, value)
-      })
-      return map
-    },
-
-    mapWithKeys<K extends keyof T, V>(callback: (item: T) => [K, V]) {
+    mapToDictionary<K extends string | number | symbol, V>(
+      callback: (item: T) => [K, V],
+    ): Map<K, V> {
       const map = new Map<K, V>()
       collection.items.forEach((item) => {
         const [key, value] = callback(item)
@@ -278,9 +285,20 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return map
     },
 
-    merge(other: T[] | CollectionOperations<T>) {
+    mapWithKeys<K extends string | number | symbol, V>(
+      callback: (item: T) => [K, V],
+    ): Map<K, V> {
+      const map = new Map<K, V>()
+      collection.items.forEach((item) => {
+        const [key, value] = callback(item)
+        map.set(key, value)
+      })
+      return map
+    },
+
+    merge<U extends T>(other: U[] | CollectionOperations<U>): CollectionOperations<T | U> {
       const otherItems = Array.isArray(other) ? other : other.items
-      return collect([...collection.items, ...otherItems])
+      return collect<T | U>([...collection.items, ...otherItems])
     },
 
     mergeRecursive(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
@@ -288,7 +306,6 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         if (source === undefined || source === null)
           return target
         if (Array.isArray(source)) {
-          // For arrays, just use the source array directly
           return [...source]
         }
         if (typeof source !== 'object')
@@ -298,7 +315,6 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
         for (const key of Object.keys(source)) {
           if (Array.isArray(source[key])) {
-            // For array properties, use source array directly
             result[key] = [...source[key]]
           }
           else if (source[key] && typeof source[key] === 'object') {
