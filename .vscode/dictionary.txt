@@ -13,6 +13,7 @@ davidanson
 degit
 deps
 destructurable
+doesnt
 dtsx
 entrypoints
 heroicons
@@ -33,6 +34,7 @@ Spatie
 stacksjs
 stringifying
 typecheck
+undot
 unplugin
 unref
 upath

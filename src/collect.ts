@@ -42,6 +42,519 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
   return {
     ...collection,
 
+    all() {
+      return [...collection.items]
+    },
+
+    average(key?: keyof T) {
+      return this.avg(key)
+    },
+
+    collapse<U>(): CollectionOperations<U> {
+      return collect(collection.items.flat() as U[])
+    },
+
+    combine<U>(values: U[]) {
+      const result: Record<string, U> = {}
+      collection.items.forEach((key, index) => {
+        result[String(key)] = values[index]
+      })
+      return collect([result]) as any
+    },
+
+    contains(keyOrItem: keyof T | T, value?: any): boolean {
+      if (arguments.length === 1) {
+        return collection.items.includes(keyOrItem as T)
+      }
+      return collection.items.some(item => item[keyOrItem as keyof T] === value)
+    },
+
+    containsOneItem() {
+      return collection.length === 1
+    },
+
+    countBy<K extends keyof T>(key: K) {
+      const counts = new Map<T[K], number>()
+      for (const item of collection.items) {
+        const value = item[key]
+        counts.set(value, (counts.get(value) || 0) + 1)
+      }
+      return counts
+    },
+
+    diffAssoc(other: T[] | CollectionOperations<T>) {
+      const otherItems = Array.isArray(other) ? other : other.items
+      return collect(
+        collection.items.filter(item =>
+          !otherItems.some(otherItem =>
+            Object.entries(item as any).every(([key, value]) =>
+              (otherItem as any)[key] === value,
+            ),
+          ),
+        ),
+      )
+    },
+
+    diffKeys<K extends keyof T>(other: Record<K, T[K]>[]) {
+      return collect(
+        collection.items.filter(item =>
+          !other.some(otherItem =>
+            Object.keys(item as any).every(key =>
+              key in otherItem,
+            ),
+          ),
+        ),
+      )
+    },
+
+    diffUsing(other: T[], callback: (a: T, b: T) => number) {
+      return collect(
+        collection.items.filter(item =>
+          !other.some(otherItem => callback(item, otherItem) === 0),
+        ),
+      )
+    },
+
+    doesntContain(keyOrItem: keyof T | T, value?: any): boolean {
+      return !this.contains(keyOrItem as any, value)
+    },
+
+    duplicates<K extends keyof T>(key?: K) {
+      const counts = new Map<any, number>()
+      const items = collection.items
+      items.forEach((item) => {
+        const value = key ? item[key] : item
+        counts.set(value, (counts.get(value) || 0) + 1)
+      })
+      return collect(
+        items.filter((item) => {
+          const value = key ? item[key] : item
+          return counts.get(value)! > 1
+        }),
+      )
+    },
+
+    each(callback: (item: T) => void): CollectionOperations<T> {
+      collection.items.forEach(callback)
+      return this
+    },
+
+    eachSpread(callback: (...args: any[]) => void): CollectionOperations<T> {
+      collection.items.forEach((item) => {
+        callback(...(Array.isArray(item) ? item : [item]))
+      })
+      return this
+    },
+
+    except<K extends keyof T>(...keys: K[]): CollectionOperations<Omit<T, K>> {
+      return collect(
+        collection.items.map((item) => {
+          const result = { ...item }
+          keys.forEach(key => delete result[key])
+          return result
+        }),
+      ) as unknown as CollectionOperations<Omit<T, K>>
+    },
+
+    firstOrFail() {
+      const item = this.first()
+      if (!item)
+        throw new Error('Item not found.')
+      return item
+    },
+
+    firstWhere<K extends keyof T>(key: K, value: T[K]) {
+      return collection.items.find(item => item[key] === value)
+    },
+
+    flatten(depth = Infinity) {
+      const flat = (arr: any[], d: number): any[] => {
+        return d > 0
+          ? arr.reduce((acc, val) =>
+            acc.concat(Array.isArray(val) ? flat(val, d - 1) : val), [])
+          : arr.slice()
+      }
+      return collect(flat(collection.items, depth))
+    },
+
+    flip<R = { [K in keyof T as T[K] extends string | number ? T[K] : never]: K }>(): CollectionOperations<R> {
+      const result = {} as any
+      for (const item of collection.items) {
+        const entries = Object.entries(item as any)
+        for (const [key, value] of entries) {
+          if (typeof value === 'string' || typeof value === 'number') {
+            result[value] = key
+          }
+        }
+      }
+      return collect([result]) as CollectionOperations<R>
+    },
+
+    forget<K extends keyof T>(key: K): CollectionOperations<Omit<T, K>> {
+      return collect(
+        collection.items.map((item) => {
+          const result = { ...item }
+          delete result[key]
+          return result
+        }),
+      ) as unknown as CollectionOperations<Omit<T, K>>
+    },
+
+    get<K extends keyof T>(key: K, defaultValue?: T[K]) {
+      const item = collection.items[0]
+      return item ? item[key] : defaultValue
+    },
+
+    has<K extends keyof T>(key: K): boolean {
+      return collection.items.some(item => key in (item as Record<string, unknown>))
+    },
+
+    keyBy<K extends keyof T>(key: K) {
+      return new Map(
+        collection.items.map(item => [item[key], item]),
+      )
+    },
+
+    macro(name: string, callback: (...args: any[]) => any): void {
+      const operations = createCollectionOperations(collection)
+        ; (operations as any)[name] = callback
+    },
+
+    make<U>(items: U[]) {
+      return collect(items)
+    },
+
+    mapInto<U extends Record<string, any>>(constructor: new () => U): CollectionOperations<U> {
+      return collect(
+        collection.items.map(item => Object.assign(new constructor(), item)),
+      ) as unknown as CollectionOperations<U>
+    },
+
+    mapToDictionary<K extends keyof T>(callback: (item: T) => [K, T[K]]) {
+      const map = new Map<K, T[K]>()
+      collection.items.forEach((item) => {
+        const [key, value] = callback(item)
+        map.set(key, value)
+      })
+      return map
+    },
+
+    mapWithKeys<K extends keyof T, V>(callback: (item: T) => [K, V]) {
+      const map = new Map<K, V>()
+      collection.items.forEach((item) => {
+        const [key, value] = callback(item)
+        map.set(key, value)
+      })
+      return map
+    },
+
+    merge(other: T[] | CollectionOperations<T>) {
+      const otherItems = Array.isArray(other) ? other : other.items
+      return collect([...collection.items, ...otherItems])
+    },
+
+    mergeRecursive(other: T[] | CollectionOperations<T>) {
+      const otherItems = Array.isArray(other) ? other : other.items
+
+      function mergeDeep(target: any, source: any): any {
+        if (typeof target !== 'object' || typeof source !== 'object')
+          return source
+        for (const key in source) {
+          if (typeof source[key] === 'object' && key in target) {
+            target[key] = mergeDeep(target[key], source[key])
+          }
+          else {
+            target[key] = source[key]
+          }
+        }
+        return target
+      }
+
+      return collect(
+        collection.items.map((item, index) =>
+          mergeDeep({ ...item }, otherItems[index] || {}),
+        ),
+      )
+    },
+
+    only<K extends keyof T>(...keys: K[]) {
+      return this.map((item) => {
+        const result = {} as Pick<T, K>
+        keys.forEach((key) => {
+          result[key] = item[key]
+        })
+        return result
+      })
+    },
+
+    pad(size: number, value: T) {
+      const result = [...collection.items]
+      const padSize = Math.abs(size)
+      const padValue = value
+
+      while (result.length < padSize) {
+        size > 0 ? result.push(padValue) : result.unshift(padValue)
+      }
+
+      return collect(result)
+    },
+
+    pop() {
+      return collection.items.pop()
+    },
+
+    prepend(value: T) {
+      return collect([value, ...collection.items])
+    },
+
+    pull<K extends keyof T>(key: K) {
+      const item = collection.items[0]
+      return item ? item[key] : undefined
+    },
+
+    push(value: T) {
+      return collect([...collection.items, value])
+    },
+
+    put<K extends keyof T>(key: K, value: T[K]): CollectionOperations<T> {
+      return collect(
+        collection.items.map(item => ({ ...item, [key]: value })),
+      ) as unknown as CollectionOperations<T>
+    },
+
+    random(size?: number) {
+      const items = [...collection.items]
+      if (typeof size === 'undefined') {
+        const index = Math.floor(Math.random() * items.length)
+        return collect([items[index]])
+      }
+
+      const shuffled = items.sort(() => Math.random() - 0.5)
+      return collect(shuffled.slice(0, size))
+    },
+
+    reject(predicate: (item: T) => boolean) {
+      return this.filter(item => !predicate(item))
+    },
+
+    replace(items: T[]) {
+      return collect(items)
+    },
+
+    replaceRecursive(items: T[]) {
+      function replaceDeep(target: any, source: any): any {
+        if (!source || typeof source !== 'object')
+          return source
+        if (Array.isArray(source)) {
+          return source.map((item, index) =>
+            replaceDeep(Array.isArray(target) ? target[index] : {}, item),
+          )
+        }
+        const result: any = {}
+        for (const key in source) {
+          result[key] = replaceDeep(target?.[key], source[key])
+        }
+        return result
+      }
+      return collect(replaceDeep(collection.items, items))
+    },
+
+    reverse() {
+      return collect([...collection.items].reverse())
+    },
+
+    shift() {
+      const copy = [...collection.items]
+      return copy.shift()
+    },
+
+    shuffle() {
+      return collect([...collection.items].sort(() => Math.random() - 0.5))
+    },
+
+    skipUntil(value: T | ((item: T) => boolean)): CollectionOperations<T> {
+      const predicate = typeof value === 'function'
+        ? value as (item: T) => boolean
+        : (item: T) => item === value
+
+      const index = collection.items.findIndex(predicate)
+      return collect(
+        index === -1 ? [] : collection.items.slice(index),
+      ) as CollectionOperations<T>
+    },
+
+    skipWhile(value: T | ((item: T) => boolean)) {
+      const predicate = typeof value === 'function'
+        ? value as (item: T) => boolean
+        : (item: T) => item === value
+
+      let index = 0
+      while (index < collection.items.length && predicate(collection.items[index])) {
+        index++
+      }
+      return collect(collection.items.slice(index))
+    },
+
+    slice(start: number, length?: number) {
+      return collect(
+        length === undefined
+          ? collection.items.slice(start)
+          : collection.items.slice(start, start + length),
+      )
+    },
+
+    sole() {
+      if (collection.length !== 1) {
+        throw new Error('Collection does not contain exactly one item.')
+      }
+      return collection.items[0]
+    },
+
+    sortDesc() {
+      return this.sort((a, b) => {
+        if (a < b)
+          return 1
+        if (a > b)
+          return -1
+        return 0
+      })
+    },
+
+    sortKeys() {
+      return collect(
+        collection.items.map((item) => {
+          const sorted: any = {}
+          Object.keys(item as object)
+            .sort()
+            .forEach((key) => {
+              sorted[key] = (item as any)[key]
+            })
+          return sorted as T
+        }),
+      )
+    },
+
+    sortKeysDesc() {
+      return collect(
+        collection.items.map((item) => {
+          const sorted: any = {}
+          Object.keys(item as object)
+            .sort((a, b) => b.localeCompare(a))
+            .forEach((key) => {
+              sorted[key] = (item as any)[key]
+            })
+          return sorted as T
+        }),
+      )
+    },
+
+    splice(start: number, deleteCount?: number, ...items: T[]) {
+      const copy = [...collection.items]
+      if (deleteCount === undefined) {
+        copy.splice(start)
+      }
+      else {
+        copy.splice(start, deleteCount, ...items)
+      }
+      return collect(copy)
+    },
+
+    split(numberOfGroups: number) {
+      const result: T[][] = []
+      const itemsPerGroup = Math.ceil(collection.length / numberOfGroups)
+
+      for (let i = 0; i < collection.length; i += itemsPerGroup) {
+        result.push(collection.items.slice(i, i + itemsPerGroup))
+      }
+
+      return collect(result)
+    },
+
+    takeUntil(value: T | ((item: T) => boolean)) {
+      const predicate = typeof value === 'function'
+        ? value as (item: T) => boolean
+        : (item: T) => item === value
+
+      const index = collection.items.findIndex(predicate)
+      return index === -1
+        ? collect(collection.items)
+        : collect(collection.items.slice(0, index))
+    },
+
+    takeWhile(value: T | ((item: T) => boolean)) {
+      const predicate = typeof value === 'function'
+        ? value as (item: T) => boolean
+        : (item: T) => item === value
+
+      let index = 0
+      while (index < collection.items.length && predicate(collection.items[index])) {
+        index++
+      }
+      return collect(collection.items.slice(0, index))
+    },
+
+    times<U>(count: number, callback: (index: number) => U) {
+      const items: U[] = []
+      for (let i = 0; i < count; i++) {
+        items.push(callback(i))
+      }
+      return collect(items)
+    },
+
+    undot() {
+      const result: Record<string, any> = {}
+      collection.items.forEach((item) => {
+        Object.entries(item as object).forEach(([key, value]) => {
+          key.split('.').reduce((acc: any, part, index, parts) => {
+            if (index === parts.length - 1) {
+              acc[part] = value
+            }
+            else {
+              acc[part] = acc[part] || {}
+            }
+            return acc[part]
+          }, result)
+        })
+      })
+      return collect([result])
+    },
+
+    unlessEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
+      return this.isNotEmpty() ? callback(this) : this
+    },
+
+    unlessNotEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
+      return this.isEmpty() ? callback(this) : this
+    },
+
+    unwrap<U>(value: U | CollectionOperations<U>): U[] {
+      if (value instanceof Object && 'items' in value) {
+        return (value as CollectionOperations<U>).toArray()
+      }
+      return Array.isArray(value) ? value : [value]
+    },
+
+    whenEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
+      return this.isEmpty() ? callback(this) : this
+    },
+
+    whenNotEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
+      return this.isNotEmpty() ? callback(this) : this
+    },
+
+    wrap<U>(value: U | U[]): CollectionOperations<U> {
+      if (Array.isArray(value)) {
+        return collect(value)
+      }
+      return collect([value])
+    },
+
+    zip<U>(array: U[]): CollectionOperations<[T, U]> {
+      return collect(
+        collection.items.map((item, index) => [item, array[index]] as [T, U]),
+      )
+    },
+
     map<U>(callback: (item: T, index: number) => U): CollectionOperations<U> {
       return collect(collection.items.map(callback))
     },

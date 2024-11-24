@@ -196,6 +196,72 @@ export interface LazyCollectionOperations<T> {
  * All available collection operations
  */
 export interface CollectionOperations<T> extends Collection<T> {
+  // Laravel-like
+  all: () => T[]
+  average: (key?: keyof T) => number // alias for avg
+  collapse: () => CollectionOperations<T extends Array<infer U> ? U : T>
+  combine: <U>(values: U[]) => CollectionOperations<Record<string, U>>
+  contains: ((item: T) => boolean) & (<K extends keyof T>(key: K, value: T[K]) => boolean)
+  containsOneItem: () => boolean
+  countBy: <K extends keyof T>(key: K) => Map<T[K], number>
+  diffAssoc: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  diffKeys: <K extends keyof T>(other: Record<K, T[K]>[]) => CollectionOperations<T>
+  diffUsing: (other: T[], callback: (a: T, b: T) => number) => CollectionOperations<T>
+  doesntContain: ((item: T) => boolean) & (<K extends keyof T>(key: K, value: T[K]) => boolean)
+  duplicates: <K extends keyof T>(key?: K) => CollectionOperations<T>
+  each: (callback: (item: T) => void) => CollectionOperations<T>
+  eachSpread: (callback: (...args: any[]) => void) => CollectionOperations<T>
+  except: <K extends keyof T>(...keys: K[]) => CollectionOperations<Omit<T, K>>
+  firstOrFail: () => T
+  firstWhere: <K extends keyof T>(key: K, value: T[K]) => T | undefined
+  flatten: (depth?: number) => CollectionOperations<T extends Array<infer U> ? U : T>
+  flip: <R = { [K in keyof T as T[K] extends string | number ? T[K] : never]: K }>() => CollectionOperations<R>
+  forget: <K extends keyof T>(key: K) => CollectionOperations<Omit<T, K>>
+  get: <K extends keyof T>(key: K, defaultValue?: T[K]) => T[K] | undefined
+  has: <K extends keyof T>(key: K) => boolean
+  keyBy: <K extends keyof T>(key: K) => Map<T[K], T>
+  macro: (name: string, callback: (...args: any[]) => any) => void
+  make: <U>(items: U[]) => CollectionOperations<U>
+  mapInto: <U extends Record<string, any>>(constructor: new () => U) => CollectionOperations<U>
+  mapToDictionary: <K extends keyof T>(callback: (item: T) => [K, T[K]]) => Map<K, T[K]>
+  mapWithKeys: <K extends keyof T, V>(callback: (item: T) => [K, V]) => Map<K, V>
+  merge: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  mergeRecursive: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  only: <K extends keyof T>(...keys: K[]) => CollectionOperations<Pick<T, K>>
+  pad: (size: number, value: T) => CollectionOperations<T>
+  pop: () => T | undefined
+  prepend: (value: T) => CollectionOperations<T>
+  pull: <K extends keyof T>(key: K) => T[K] | undefined
+  push: (value: T) => CollectionOperations<T>
+  put: <K extends keyof T>(key: K, value: T[K]) => CollectionOperations<T>
+  random: (size?: number) => CollectionOperations<T>
+  reject: (predicate: (item: T) => boolean) => CollectionOperations<T>
+  replace: (items: T[]) => CollectionOperations<T>
+  replaceRecursive: (items: T[]) => CollectionOperations<T>
+  reverse: () => CollectionOperations<T>
+  shift: () => T | undefined
+  shuffle: () => CollectionOperations<T>
+  skipUntil: (value: T | ((item: T) => boolean)) => CollectionOperations<T>
+  skipWhile: (value: T | ((item: T) => boolean)) => CollectionOperations<T>
+  slice: (start: number, length?: number) => CollectionOperations<T>
+  sole: () => T
+  sortDesc: () => CollectionOperations<T>
+  sortKeys: () => CollectionOperations<T>
+  sortKeysDesc: () => CollectionOperations<T>
+  splice: (start: number, deleteCount?: number, ...items: T[]) => CollectionOperations<T>
+  split: (numberOfGroups: number) => CollectionOperations<T[]>
+  takeUntil: (value: T | ((item: T) => boolean)) => CollectionOperations<T>
+  takeWhile: (value: T | ((item: T) => boolean)) => CollectionOperations<T>
+  times: <U>(count: number, callback: (index: number) => U) => CollectionOperations<U>
+  undot: () => CollectionOperations<Record<string, any>>
+  unlessEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
+  unlessNotEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
+  unwrap: <U>(value: U | CollectionOperations<U>) => U[]
+  whenEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
+  whenNotEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
+  wrap: <U>(value: U | U[]) => CollectionOperations<U>
+  zip: <U>(array: U[]) => CollectionOperations<[T, U]>
+
   // Transformations
   map: <U>(callback: (item: T, index: number) => U) => CollectionOperations<U>
   filter: (predicate: (item: T, index: number) => boolean) => CollectionOperations<T>

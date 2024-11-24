@@ -213,6 +213,114 @@ const chunks = collection.chunk(2) // [[1, 2], [3, 4], [5]]
 const first = collection.first() // 1
 const last = collection.last() // 5
 const secondItem = collection.nth(1) // 2
+
+// all() - Get all items as array
+const items = collection.all() // [1, 2, 3, 4, 5]
+
+// average/avg - Calculate average of items
+collection.average() // 3
+collection.avg() // 3
+
+// chunk - Split collection into smaller collections
+collection.chunk(2) // [[1, 2], [3, 4], [5]]
+
+// collapse - Flatten a collection of arrays
+const nested = collect([[1, 2], [3, 4], [5]])
+nested.collapse() // [1, 2, 3, 4, 5]
+
+// combine - Create collection by combining arrays
+const keys = collect(['name', 'age'])
+const values = ['John', 25]
+keys.combine(values) // { name: 'John', age: 25 }
+
+// contains/containsOneItem - Check for item existence
+collection.contains(3) // true
+collection.containsOneItem() // false
+
+// countBy - Count occurrences by value
+const items = collect(['apple', 'banana', 'apple', 'orange'])
+items.countBy() // Map { 'apple' => 2, 'banana' => 1, 'orange' => 1 }
+
+// diff/diffAssoc/diffKeys - Find differences between collections
+const col1 = collect([1, 2, 3])
+const col2 = collect([2, 3, 4])
+col1.diff(col2) // [1]
+
+// dd/dump - Dump collection and die or just dump
+collection.dump() // Console logs items
+collection.dd() // Console logs and exits
+
+// each/eachSpread - Iterate over items
+collection.each(item => console.log(item))
+collection.eachSpread((a, b) => console.log(a, b)) // For array items
+
+// except/only - Get all items except/only specified keys
+const user = collect({ id: 1, name: 'John', age: 25 })
+user.except('age') // { id: 1, name: 'John' }
+user.only('name', 'age') // { name: 'John', age: 25 }
+
+// firstOrFail - Get first item or throw
+collection.firstOrFail() // 1 or throws if empty
+
+// firstWhere - Get first item matching criteria
+const users = collect([
+  { id: 1, name: 'John' },
+  { id: 2, name: 'Jane' }
+])
+users.firstWhere('name', 'Jane') // { id: 2, name: 'Jane' }
+
+// flip - Swap keys and values
+const flipped = collect({ name: 'John' }).flip() // { John: 'name' }
+
+// forget - Remove an item by key
+const array = collect(['a', 'b', 'c'])
+array.forget(1) // ['a', 'c']
+
+// has/get - Check key existence / Get value
+const item = collect({ name: 'John' })
+item.has('name') // true
+item.get('name') // 'John'
+
+// mapInto - Map items into new class instances
+class User {
+  name: string = ''
+  greet() { return `Hello ${this.name}` }
+}
+collect([{ name: 'John' }])
+  .mapInto(User)
+  .first()
+  .greet() // "Hello John"
+
+// prepend/push/put - Add items
+collection.prepend(0) // [0, 1, 2, 3, 4, 5]
+collection.push(6) // [1, 2, 3, 4, 5, 6]
+collection.put('key', 'value') // Adds/updates key-value
+
+// random - Get random item(s)
+collection.random() // Random item
+collection.random(2) // Array of 2 random items
+
+// skip/skipUntil/skipWhile - Skip items
+collection.skip(2) // [3, 4, 5]
+collection.skipUntil(3) // [3, 4, 5]
+collection.skipWhile(n => n < 3) // [3, 4, 5]
+
+// sole - Get only item in single-item collection
+collect([1]).sole() // 1 (throws if not exactly one item)
+
+// take/takeUntil/takeWhile - Take items
+collection.take(2) // [1, 2]
+collection.takeUntil(3) // [1, 2]
+collection.takeWhile(n => n < 3) // [1, 2]
+
+// when/unless - Conditional execution
+collection
+  .when(true, col => col.take(3))
+  .unless(false, col => col.take(2))
+
+// wrap/unwrap - Wrap/unwrap value in collection
+collect().wrap([1, 2, 3]) // Collection([1, 2, 3])
+collection.unwrap() // [1, 2, 3]
 ```
 
 ### Working with Objects
