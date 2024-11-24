@@ -349,11 +349,15 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(merged) as CollectionOperations<RecordMerge<T, U>>
     },
 
-    only<K extends keyof T>(...keys: K[]) {
-      return this.map((item) => {
-        const result = {} as Pick<T, K>
+    only<K extends string>(...keys: K[]) {
+      return this.map((item: T) => {
+        const result = {} as { [P in K & keyof T]?: T[P] }
         keys.forEach((key) => {
-          result[key] = item[key]
+          // Type guard to ensure item is an object before using 'in'
+          if (item && typeof item === 'object' && key in item) {
+            const typedKey = key as keyof T & K
+            result[typedKey] = item[typedKey]
+          }
         })
         return result
       })

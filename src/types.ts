@@ -236,7 +236,9 @@ export interface CollectionOperations<T> extends Collection<T> {
   ) => Map<K, V>
   merge: <U extends T>(other: U[] | CollectionOperations<U>) => CollectionOperations<T | U>
   mergeRecursive: <U>(other: U[] | CollectionOperations<U>) => CollectionOperations<RecordMerge<T, U>>
-  only: <K extends keyof T>(...keys: K[]) => CollectionOperations<Pick<T, K>>
+  only: <K extends string>(...keys: K[]) => CollectionOperations<{
+    [P in K & keyof T]?: T[P]
+  }>
   pad: (size: number, value: T) => CollectionOperations<T>
   pop: () => T | undefined
   prepend: (value: T) => CollectionOperations<T>

@@ -2,14 +2,6 @@ import type { CollectionOperations } from './types'
 import { collect } from './collect'
 
 /**
- * Helper function to create an empty collection
- */
-export function emptyCollection<T extends Record<string, unknown>>(): CollectionOperations<T> {
-  const empty: T[] = []
-  return collect(empty)
-}
-
-/**
  * Helper function to create a collection from a range of numbers
  */
 export function range(start: number, end: number, step: number = 1): CollectionOperations<number> {
