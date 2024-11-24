@@ -1,4 +1,4 @@
-import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo, VersionStore } from './types'
+import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RecordMerge, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo, VersionStore } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
 import { getNextTimestamp, isSameDay } from './utils'
@@ -301,41 +301,52 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect<T | U>([...collection.items, ...otherItems])
     },
 
-    mergeRecursive(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
-      function mergeRecursiveHelper(target: any, source: any): any {
+    mergeRecursive<U>(other: U[] | CollectionOperations<U>): CollectionOperations<RecordMerge< T, U >> {
+      function mergeRecursiveHelper<A extends object, B extends object>(
+        target: A,
+        source: B,
+      ): RecordMerge<A, B> {
         if (source === undefined || source === null)
-          return target
-        if (Array.isArray(source)) {
-          return [...source]
-        }
-        if (typeof source !== 'object')
-          return source
+          return target as RecordMerge<A, B>
 
-        const result = Array.isArray(target) ? [...target] : { ...target }
+        if (Array.isArray(source))
+          return [...source] as RecordMerge<A, B>
+
+        if (typeof source !== 'object')
+          return source as RecordMerge<A, B>
+
+        const result: Record<string, any> = Array.isArray(target) ? [...target] : { ...target }
 
         for (const key of Object.keys(source)) {
-          if (Array.isArray(source[key])) {
-            result[key] = [...source[key]]
+          const sourceValue = (source as Record<string, any>)[key]
+          if (Array.isArray(sourceValue)) {
+            result[key] = [...sourceValue]
           }
-          else if (source[key] && typeof source[key] === 'object') {
-            result[key] = target[key]
-              ? mergeRecursiveHelper(target[key], source[key])
-              : { ...source[key] }
+          else if (sourceValue && typeof sourceValue === 'object') {
+            result[key] = key in result
+              ? mergeRecursiveHelper(
+                result[key] as object,
+                sourceValue as object,
+              )
+              : { ...sourceValue }
           }
           else {
-            result[key] = source[key]
+            result[key] = sourceValue
           }
         }
-        return result
+        return result as RecordMerge<A, B>
       }
 
       const otherItems = Array.isArray(other) ? other : other.items
       const merged = collection.items.map((item, index) => {
         return index < otherItems.length
-          ? mergeRecursiveHelper(item, otherItems[index])
+          ? mergeRecursiveHelper(
+            item as object,
+            otherItems[index] as object,
+          )
           : { ...item }
       })
-      return collect(merged)
+      return collect(merged) as CollectionOperations<RecordMerge<T, U>>
     },
 
     only<K extends keyof T>(...keys: K[]) {

@@ -235,7 +235,7 @@ export interface CollectionOperations<T> extends Collection<T> {
     callback: (item: T) => [K, V]
   ) => Map<K, V>
   merge: <U extends T>(other: U[] | CollectionOperations<U>) => CollectionOperations<T | U>
-  mergeRecursive: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  mergeRecursive: <U>(other: U[] | CollectionOperations<U>) => CollectionOperations<RecordMerge<T, U>>
   only: <K extends keyof T>(...keys: K[]) => CollectionOperations<Pick<T, K>>
   pad: (size: number, value: T) => CollectionOperations<T>
   pop: () => T | undefined
@@ -635,3 +635,21 @@ export interface KMeansResult<T> extends CollectionOperations<ClusterResult<T>> 
     <K extends keyof ClusterResult<T>>(key: K): CollectionOperations<ClusterResult<T>[K]>
   }
 }
+
+type IsEmptyType<T> = T extends never[] ? true : T extends Record<string, never> ? true : false
+
+export type RecordMerge<T, U> = IsEmptyType<U> extends true
+  ? T
+  : [T, U] extends [any[], any[]]
+      ? U
+      : [T, U] extends [object, object]
+          ? {
+              [K in keyof T | keyof U]: K extends keyof T
+                ? K extends keyof U
+                  ? RecordMerge<T[K], U[K]>
+                  : T[K]
+                : K extends keyof U
+                  ? U[K]
+                  : never
+            }
+          : U
