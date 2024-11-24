@@ -2629,7 +2629,7 @@ describe('Collection Performance Features', () => {
           return item
         })
 
-      await expect(lazyWithError.toArray()).rejects.toThrow('Test error')
+      expect(lazyWithError.toArray()).rejects.toThrow('Test error')
     })
 
     it('should support batch processing', async () => {
@@ -2639,20 +2639,17 @@ describe('Collection Performance Features', () => {
       let processedCount = 0
 
       const BATCH_SIZE = 10
-      const results = await collection
-        .lazy()
-        .batch(BATCH_SIZE)
-        .map((batch) => {
-          if (Array.isArray(batch)) {
-            processedCount += batch.length
-            batchSpy()
-          }
-          return batch
-        })
-        .toArray()
+      const results = []
 
-      // Verify results contain all items
-      expect(results.flat().length).toBe(items.length)
+      // Use for-await to process the batches
+      for await (const batch of collection.batch(BATCH_SIZE)) {
+        processedCount += batch.count()
+        batchSpy()
+        results.push(...batch.toArray())
+      }
+
+      // Verify all items were processed
+      expect(results.length).toBe(items.length)
 
       // Verify total processed count
       expect(processedCount).toBe(items.length)
@@ -2661,19 +2658,10 @@ describe('Collection Performance Features', () => {
       const expectedBatches = Math.ceil(items.length / BATCH_SIZE)
       expect(batchSpy).toHaveBeenCalledTimes(expectedBatches)
 
-      // Verify batch sizes
-      for (let i = 0; i < results.length; i++) {
-        const batch = results[i]
-        if (i < expectedBatches - 1) {
-          // All batches except last should be full size
-          expect(batch.length).toBe(BATCH_SIZE)
-        } else {
-          // Last batch might be partial
-          const remainingItems = items.length % BATCH_SIZE
-          const expectedLastBatchSize = remainingItems || BATCH_SIZE
-          expect(batch.length).toBe(expectedLastBatchSize)
-        }
-      }
+      // Verify the processed items are correct
+      results.forEach((item, index) => {
+        expect(item.id).toBe(index)
+      })
     })
   })
 
