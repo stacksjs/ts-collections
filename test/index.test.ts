@@ -153,6 +153,1499 @@ describe('Collection Core Operations', () => {
       ])
     })
   })
+
+  describe('all()', () => {
+    it('should return all items as array', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.all()).toEqual([1, 2, 3])
+    })
+
+    it('should return empty array for empty collection', () => {
+      const collection = collect([])
+      expect(collection.all()).toEqual([])
+    })
+
+    it('should return a new array instance', () => {
+      const original = [1, 2, 3]
+      const collection = collect(original)
+      const result = collection.all()
+
+      expect(result).toEqual(original)
+      expect(result).not.toBe(original)
+    })
+  })
+
+  describe('average()', () => {
+    it('should calculate average of numeric array', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      expect(collection.average()).toBe(3)
+    })
+
+    it('should calculate average using object key', () => {
+      const collection = collect([
+        { value: 10 },
+        { value: 20 },
+        { value: 30 },
+      ])
+      expect(collection.average('value')).toBe(20)
+    })
+
+    it('should return 0 for empty collection', () => {
+      const collection = collect([])
+      expect(collection.average()).toBe(0)
+    })
+
+    it('should handle non-numeric values', () => {
+      const collection = collect(['1', '2', '3'])
+      expect(collection.average()).toBe(2)
+    })
+  })
+
+  describe('collapse()', () => {
+    it('should flatten array of arrays', () => {
+      const collection = collect([[1, 2], [3, 4], [5, 6]])
+      expect(collection.collapse().toArray()).toEqual([1, 2, 3, 4, 5, 6])
+    })
+
+    it('should handle empty arrays', () => {
+      const collection = collect([[]])
+      expect(collection.collapse().toArray()).toEqual([])
+    })
+
+    it('should handle mixed depth arrays', () => {
+      const collection = collect([[1], [2, 3], [], [4, 5, 6]])
+      expect(collection.collapse().toArray()).toEqual([1, 2, 3, 4, 5, 6])
+    })
+  })
+
+  describe('combine()', () => {
+    it('should combine array with values', () => {
+      const collection = collect(['name', 'age'])
+      const result = collection.combine(['John', 25])
+      expect(result.first()).toEqual({ name: 'John', age: 25 })
+    })
+
+    it('should handle empty arrays', () => {
+      const collection = collect([])
+      const result = collection.combine([])
+      expect(result.first()).toEqual({})
+    })
+
+    it('should handle mismatched lengths', () => {
+      const collection = collect(['a', 'b', 'c'])
+      const result = collection.combine([1, 2])
+      expect(result.first()).toEqual({ a: 1, b: 2, c: undefined })
+    })
+  })
+
+  describe('contains()', () => {
+    it('should check direct value containment', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.contains(2)).toBe(true)
+      expect(collection.contains(4)).toBe(false)
+    })
+
+    it('should check object property containment', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+      expect(collection.contains('id', 1)).toBe(true)
+      expect(collection.contains('name', 'Jane')).toBe(true)
+      expect(collection.contains('id', 3)).toBe(false)
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.contains(1)).toBe(false)
+      expect(collection.contains('id', 1)).toBe(false)
+    })
+  })
+
+  describe('containsOneItem()', () => {
+    it('should return true for single item collection', () => {
+      const collection = collect([1])
+      expect(collection.containsOneItem()).toBe(true)
+    })
+
+    it('should return false for empty collection', () => {
+      const collection = collect([])
+      expect(collection.containsOneItem()).toBe(false)
+    })
+
+    it('should return false for multiple items', () => {
+      const collection = collect([1, 2])
+      expect(collection.containsOneItem()).toBe(false)
+    })
+  })
+
+  describe('countBy()', () => {
+    it('should count occurrences by primitive values', () => {
+      const collection = collect([1, 1, 2, 2, 2, 3])
+      const counts = collection.countBy(item => item)
+      expect(Array.from(counts.entries())).toEqual([[1, 2], [2, 3], [3, 1]])
+    })
+
+    it('should count occurrences by object property', () => {
+      const collection = collect([
+        { type: 'A' },
+        { type: 'B' },
+        { type: 'A' },
+        { type: 'C' },
+      ])
+      const counts = collection.countBy('type')
+      expect(Array.from(counts.entries())).toEqual([['A', 2], ['B', 1], ['C', 1]])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      const counts = collection.countBy('any')
+      expect(Array.from(counts.entries())).toEqual([])
+    })
+  })
+
+  describe('diffAssoc()', () => {
+    it('should compare arrays by value and index', () => {
+      const collection = collect([1, 2, 3, 4])
+      const diff = collection.diffAssoc([1, 2, 3, 5])
+      expect(diff.toArray()).toEqual([4])
+    })
+
+    it('should compare objects by values', () => {
+      const collection = collect([
+        { id: 1, value: 'a' },
+        { id: 2, value: 'b' },
+      ])
+      const diff = collection.diffAssoc([
+        { id: 1, value: 'a' },
+        { id: 2, value: 'c' },
+      ])
+      expect(diff.toArray()).toEqual([{ id: 2, value: 'b' }])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([])
+      expect(collection.diffAssoc([]).toArray()).toEqual([])
+      expect(collection.diffAssoc([1, 2]).toArray()).toEqual([])
+    })
+  })
+
+  describe('diffKeys()', () => {
+    it('should compare objects by keys', () => {
+      const collection = collect([
+        { a: 1, b: 2 },
+        { c: 3, d: 4 },
+      ])
+      const diff = collection.diffKeys([{ a: 10, b: 20 }])
+      expect(diff.toArray()).toEqual([{ c: 3, d: 4 }])
+    })
+
+    it('should ignore values when comparing', () => {
+      const collection = collect([
+        { x: 1, y: 2 },
+        { z: 3 },
+      ])
+      const diff = collection.diffKeys([{ x: 99, y: 99 }])
+      expect(diff.toArray()).toEqual([{ z: 3 }])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([])
+      expect(collection.diffKeys([]).toArray()).toEqual([])
+    })
+  })
+
+  describe('diffUsing()', () => {
+    it('should use custom comparison function', () => {
+      const collection = collect([1, 2, 3, 4])
+      const diff = collection.diffUsing([2, 4, 6], (a, b) => a - b)
+      expect(diff.toArray()).toEqual([1, 3])
+    })
+
+    it('should work with objects using custom comparator', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+      const diff = collection.diffUsing(
+        [{ id: 1, name: 'Johnny' }],
+        (a, b) => a.id === b.id ? 0 : 1,
+      )
+      expect(diff.toArray()).toEqual([{ id: 2, name: 'Jane' }])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.diffUsing([], (a, b) => a - b).toArray()).toEqual([1, 2, 3])
+    })
+  })
+
+  describe('doesntContain()', () => {
+    it('should check direct value non-containment', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.doesntContain(4)).toBe(true)
+      expect(collection.doesntContain(2)).toBe(false)
+    })
+
+    it('should check object property non-containment', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+      expect(collection.doesntContain('id', 3)).toBe(true)
+      expect(collection.doesntContain('name', 'John')).toBe(false)
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.doesntContain(1)).toBe(true)
+      expect(collection.doesntContain('any', 'value')).toBe(true)
+    })
+  })
+
+  describe('duplicates()', () => {
+    it('should find duplicate values', () => {
+      const collection = collect([1, 2, 2, 3, 3, 3])
+      expect(collection.duplicates().toArray()).toEqual([2, 2, 3, 3, 3])
+    })
+
+    it('should find duplicates by key', () => {
+      const collection = collect([
+        { id: 1, type: 'A' },
+        { id: 2, type: 'B' },
+        { id: 3, type: 'A' },
+      ])
+      expect(collection.duplicates('type').toArray()).toEqual([
+        { id: 1, type: 'A' },
+        { id: 3, type: 'A' },
+      ])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.duplicates().toArray()).toEqual([])
+    })
+  })
+
+  describe('each()', () => {
+    it('should iterate over all items', () => {
+      const collection = collect([1, 2, 3])
+      const result: number[] = []
+      collection.each(item => result.push(item * 2))
+      expect(result).toEqual([2, 4, 6])
+    })
+
+    it('should return the collection', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.each(() => { })
+      expect(result).toBe(collection)
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      const result: any[] = []
+      collection.each(item => result.push(item))
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('eachSpread()', () => {
+    it('should spread array items as arguments', () => {
+      const collection = collect([[1, 2], [3, 4], [5, 6]])
+      const results: number[] = []
+      collection.eachSpread((first, second) => {
+        results.push(first + second)
+      })
+      expect(results).toEqual([3, 7, 11])
+    })
+
+    it('should handle arrays of different lengths', () => {
+      const collection = collect([[1], [2, 3], [4, 5, 6]])
+      const results: any[] = []
+      collection.eachSpread((...args) => {
+        results.push(args)
+      })
+      expect(results).toEqual([[1], [2, 3], [4, 5, 6]])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      const results: any[] = []
+      collection.eachSpread((...args) => results.push(args))
+      expect(results).toEqual([])
+    })
+  })
+
+  describe('except()', () => {
+    it('should exclude specified keys from objects', () => {
+      const collection = collect([
+        { id: 1, name: 'John', age: 30 },
+        { id: 2, name: 'Jane', age: 25 },
+      ])
+      const result = collection.except('age')
+      expect(result.toArray()).toEqual([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+    })
+
+    it('should handle multiple keys', () => {
+      const collection = collect([
+        { a: 1, b: 2, c: 3, d: 4 },
+      ])
+      const result = collection.except('a', 'c')
+      expect(result.toArray()).toEqual([
+        { b: 2, d: 4 },
+      ])
+    })
+
+    it('should handle non-existent keys', () => {
+      const collection = collect([{ a: 1, b: 2 }])
+      const result = collection.except('c')
+      expect(result.toArray()).toEqual([{ a: 1, b: 2 }])
+    })
+  })
+
+  describe('firstOrFail()', () => {
+    it('should return first item if exists', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.firstOrFail()).toBe(1)
+    })
+
+    it('should throw error if collection is empty', () => {
+      const collection = collect([])
+      expect(() => collection.firstOrFail()).toThrow('Item not found.')
+    })
+  })
+
+  describe('firstWhere()', () => {
+    it('should find first item matching key-value pair', () => {
+      const collection = collect([
+        { id: 1, active: false },
+        { id: 2, active: true },
+        { id: 3, active: true },
+      ])
+      expect(collection.firstWhere('active', true)).toEqual({ id: 2, active: true })
+    })
+
+    it('should return undefined if no match found', () => {
+      const collection = collect([
+        { id: 1, active: false },
+      ])
+      expect(collection.firstWhere('active', true)).toBeUndefined()
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.firstWhere('any', true)).toBeUndefined()
+    })
+  })
+
+  describe('flatten()', () => {
+    it('should flatten nested arrays to specified depth', () => {
+      const collection = collect([1, [2, 3], [4, [5, 6]]])
+      expect(collection.flatten(1).toArray()).toEqual([1, 2, 3, 4, [5, 6]])
+      expect(collection.flatten(2).toArray()).toEqual([1, 2, 3, 4, 5, 6])
+    })
+
+    it('should flatten all levels when no depth specified', () => {
+      const collection = collect([1, [2, [3, [4, [5]]]], 6])
+      expect(collection.flatten().toArray()).toEqual([1, 2, 3, 4, 5, 6])
+    })
+
+    it('should handle empty arrays', () => {
+      const collection = collect([[], [[]], [[], [[]]]])
+      expect(collection.flatten().toArray()).toEqual([])
+    })
+
+    it('should preserve non-array elements', () => {
+      const collection = collect([1, { a: 2 }, [3, 4]])
+      expect(collection.flatten().toArray()).toEqual([1, { a: 2 }, 3, 4])
+    })
+  })
+
+  describe('flip()', () => {
+    it('should flip keys and values for objects', () => {
+      const collection = collect([
+        { name: 'id', value: 123 },
+        { name: 'type', value: 'user' },
+      ])
+      const flipped = collection.flip<{ [key: string | number]: string }>()
+
+      expect(flipped.first()).toEqual({
+        id: 'name',
+        123: 'value',
+        type: 'name',
+        user: 'value',
+      })
+    })
+
+    it('should handle non-string/non-number values by ignoring them', () => {
+      const collection = collect([
+        { a: true, b: false },
+        { c: 'hello', d: 42 },
+      ])
+      const flipped = collection.flip<{ [key: string | number]: string | number }>()
+
+      expect(flipped.first()).toEqual({
+        hello: 'c',
+        42: 'd',
+      }) // Only string/number values are flipped
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.flip().toArray()).toEqual([])
+    })
+  })
+
+  describe('forget()', () => {
+    it('should remove specified key from objects', () => {
+      const collection = collect([
+        { id: 1, name: 'John', age: 30 },
+        { id: 2, name: 'Jane', age: 25 },
+      ])
+      const result = collection.forget('age')
+      expect(result.toArray()).toEqual([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+    })
+
+    it('should handle non-existent keys', () => {
+      const collection = collect([{ a: 1 }])
+      expect(collection.forget('b').first()).toEqual({ a: 1 })
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.forget('any').toArray()).toEqual([])
+    })
+  })
+
+  describe('get()', () => {
+    it('should get value by key from first item', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+      expect(collection.get('name')).toBe('John')
+    })
+
+    it('should return default value if key not found', () => {
+      const collection = collect([{ a: 1 }])
+      expect(collection.get('b', 'default')).toBe('default')
+    })
+
+    it('should return undefined for empty collection', () => {
+      const collection = collect([])
+      expect(collection.get('any')).toBeUndefined()
+    })
+  })
+
+  describe('has()', () => {
+    it('should check if key exists in any item', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2 },
+      ])
+      expect(collection.has('name')).toBe(true)
+      expect(collection.has('age')).toBe(false)
+    })
+
+    it('should work with undefined values', () => {
+      const collection = collect([{ a: undefined }])
+      expect(collection.has('a')).toBe(true)
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.has('any')).toBe(false)
+    })
+  })
+
+  describe('keyBy()', () => {
+    it('should create map keyed by specified property', () => {
+      const collection = collect([
+        { id: 'a', value: 1 },
+        { id: 'b', value: 2 },
+      ])
+      const map = collection.keyBy('id')
+      expect(map.get('a')).toEqual({ id: 'a', value: 1 })
+      expect(map.get('b')).toEqual({ id: 'b', value: 2 })
+    })
+
+    it('should handle duplicate keys by keeping last value', () => {
+      const collection = collect([
+        { type: 'a', value: 1 },
+        { type: 'a', value: 2 },
+      ])
+      const map = collection.keyBy('type')
+      expect(map.get('a')).toEqual({ type: 'a', value: 2 })
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(Array.from(collection.keyBy('any').entries())).toEqual([])
+    })
+  })
+
+  describe('macro()', () => {
+    it('should add custom method to collection', () => {
+      const collection = collect([1, 2, 3])
+      collection.macro('double', function () {
+        return this.map(x => x * 2)
+      })
+      expect((collection as any).double().toArray()).toEqual([2, 4, 6])
+    })
+
+    it('should handle method with arguments', () => {
+      const collection = collect([1, 2, 3])
+      collection.macro('multiplyBy', function (factor: number) {
+        return this.map(x => x * factor)
+      })
+      expect((collection as any).multiplyBy(3).toArray()).toEqual([3, 6, 9])
+    })
+  })
+
+  describe('make()', () => {
+    it('should create new collection with given items', () => {
+      const collection = collect([1, 2, 3])
+      const newCollection = collection.make([4, 5, 6])
+      expect(newCollection.toArray()).toEqual([4, 5, 6])
+    })
+
+    it('should create empty collection', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.make([]).toArray()).toEqual([])
+    })
+  })
+
+  describe('mapInto()', () => {
+    it('should map items into new class instances', () => {
+      class User {
+        constructor(public id?: number, public name?: string) { }
+      }
+
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+
+      const users = collection.mapInto(User)
+      expect(users.toArray()).toEqual([
+        new User(1, 'John'),
+        new User(2, 'Jane'),
+      ])
+      expect(users.first() instanceof User).toBe(true)
+    })
+
+    it('should handle empty collection', () => {
+      class Any { }
+      const collection = collect([])
+      expect(collection.mapInto(Any).toArray()).toEqual([])
+    })
+  })
+
+  describe('mapToDictionary()', () => {
+    it('should create dictionary from callback results', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+      const dict = collection.mapToDictionary(item => [`user${item.id}`, item.name])
+      expect(Array.from(dict.entries())).toEqual([
+        ['user1', 'John'],
+        ['user2', 'Jane'],
+      ])
+    })
+
+    it('should handle duplicate keys', () => {
+      const collection = collect([1, 2, 3])
+      const dict = collection.mapToDictionary(item => ['key', item])
+      expect(dict.get('key')).toBe(3) // Last value wins
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(Array.from(collection.mapToDictionary(x => ['key', x]).entries())).toEqual([])
+    })
+  })
+
+  describe('mapWithKeys()', () => {
+    it('should create map from callback results', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.mapWithKeys(item => [`num${item}`, item * 2])
+      expect(Array.from(result.entries())).toEqual([
+        ['num1', 2],
+        ['num2', 4],
+        ['num3', 6],
+      ])
+    })
+
+    it('should handle complex values', () => {
+      const collection = collect([
+        { id: 1, data: 'a' },
+        { id: 2, data: 'b' },
+      ])
+      const result = collection.mapWithKeys(item => [item.id, item.data])
+      expect(Array.from(result.entries())).toEqual([
+        [1, 'a'],
+        [2, 'b'],
+      ])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(Array.from(collection.mapWithKeys(x => ['key', x]).entries())).toEqual([])
+    })
+  })
+
+  describe('merge()', () => {
+    it('should merge two collections', () => {
+      const collection = collect([1, 2])
+      const result = collection.merge([3, 4])
+      expect(result.toArray()).toEqual([1, 2, 3, 4])
+    })
+
+    it('should merge with another collection instance', () => {
+      const collection1 = collect([1, 2])
+      const collection2 = collect([3, 4])
+      expect(collection1.merge(collection2).toArray()).toEqual([1, 2, 3, 4])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([1, 2])
+      expect(collection.merge([]).toArray()).toEqual([1, 2])
+      expect(collect([]).merge([1, 2]).toArray()).toEqual([1, 2])
+    })
+  })
+
+  describe('mergeRecursive()', () => {
+    it('should merge nested objects recursively', () => {
+      const collection = collect([
+        { id: 1, meta: { x: 1, y: 2 } },
+      ])
+      const result = collection.mergeRecursive([
+        { id: 1, meta: { y: 3, z: 4 } },
+      ])
+      expect(result.first()).toEqual({
+        id: 1,
+        meta: { x: 1, y: 3, z: 4 },
+      })
+    })
+
+    it('should handle arrays in nested objects', () => {
+      const collection = collect([
+        { items: [1, 2], data: { a: [1] } },
+      ])
+      const result = collection.mergeRecursive([
+        { items: [3], data: { a: [2] } },
+      ])
+      expect(result.first()).toEqual({
+        items: [3],
+        data: { a: [2] },
+      })
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([{ a: 1 }])
+      expect(collection.mergeRecursive([]).toArray()).toEqual([{ a: 1 }])
+    })
+  })
+
+  describe('only()', () => {
+    it('should keep only specified keys', () => {
+      const collection = collect([
+        { id: 1, name: 'John', age: 30, email: 'john@example.com' },
+        { id: 2, name: 'Jane', age: 25, email: 'jane@example.com' },
+      ])
+      const result = collection.only('id', 'name')
+      expect(result.toArray()).toEqual([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+    })
+
+    it('should handle non-existent keys', () => {
+      const collection = collect([{ a: 1, b: 2 }])
+      expect(collection.only('a', 'c').toArray()).toEqual([{ a: 1 }])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.only('any').toArray()).toEqual([])
+    })
+  })
+
+  describe('pad()', () => {
+    it('should pad collection to specified size', () => {
+      const collection = collect([1, 2])
+      expect(collection.pad(4, 0).toArray()).toEqual([1, 2, 0, 0])
+      expect(collection.pad(-4, 0).toArray()).toEqual([0, 0, 1, 2])
+    })
+
+    it('should handle zero padding', () => {
+      const collection = collect([1, 2])
+      expect(collection.pad(0, 0).toArray()).toEqual([1, 2])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.pad(2, 'x').toArray()).toEqual(['x', 'x'])
+    })
+  })
+
+  describe('pop()', () => {
+    it('should remove and return last element', () => {
+      const collection = collect([1, 2, 3])
+      const popped = collection.pop()
+      expect(popped).toBe(3)
+      expect(collection.toArray()).toEqual([1, 2])
+    })
+
+    it('should return undefined for empty collection', () => {
+      const collection = collect([])
+      expect(collection.pop()).toBeUndefined()
+    })
+  })
+
+  describe('prepend()', () => {
+    it('should add element to beginning', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.prepend(0)
+      expect(result.toArray()).toEqual([0, 1, 2, 3])
+    })
+
+    it('should work with objects', () => {
+      const collection = collect([{ id: 2 }])
+      const result = collection.prepend({ id: 1 })
+      expect(result.toArray()).toEqual([{ id: 1 }, { id: 2 }])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.prepend(1).toArray()).toEqual([1])
+    })
+  })
+
+  describe('pull()', () => {
+    it('should return value of specified key from first item', () => {
+      const collection = collect([
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ])
+      expect(collection.pull('name')).toBe('John')
+    })
+
+    it('should return undefined if key not found', () => {
+      const collection = collect([{ a: 1 }])
+      expect(collection.pull('b')).toBeUndefined()
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.pull('any')).toBeUndefined()
+    })
+  })
+
+  describe('push()', () => {
+    it('should add element to end', () => {
+      const collection = collect([1, 2])
+      const result = collection.push(3)
+      expect(result.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should work with objects', () => {
+      const collection = collect([{ id: 1 }])
+      const result = collection.push({ id: 2 })
+      expect(result.toArray()).toEqual([{ id: 1 }, { id: 2 }])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.push(1).toArray()).toEqual([1])
+    })
+  })
+
+  describe('put()', () => {
+    it('should set value for key in all items', () => {
+      const collection = collect([
+        { id: 1, active: false },
+        { id: 2, active: false },
+      ])
+      const result = collection.put('active', true)
+      expect(result.toArray()).toEqual([
+        { id: 1, active: true },
+        { id: 2, active: true },
+      ])
+    })
+
+    it('should add new key if not exists', () => {
+      const collection = collect([{ id: 1 }])
+      const result = collection.put('new', 'value')
+      expect(result.first()).toEqual({ id: 1, new: 'value' })
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.put('key', 'value').toArray()).toEqual([])
+    })
+  })
+
+  describe('random()', () => {
+    it('should return random item when no size specified', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.random()
+      expect(result.count()).toBe(1)
+      expect(collection.contains(result.first())).toBe(true)
+    })
+
+    it('should return multiple random items when size specified', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.random(3)
+      expect(result.count()).toBe(3)
+      result.each((item) => {
+        expect(collection.contains(item)).toBe(true)
+      })
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.random().toArray()).toEqual([])
+    })
+
+    it('should handle size larger than collection', () => {
+      const collection = collect([1, 2])
+      expect(collection.random(5).count()).toBe(2)
+    })
+  })
+
+  describe('reject()', () => {
+    it('should filter out items that match predicate', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.reject(item => item % 2 === 0)
+      expect(result.toArray()).toEqual([1, 3, 5])
+    })
+
+    it('should work with objects', () => {
+      const collection = collect([
+        { id: 1, active: true },
+        { id: 2, active: false },
+        { id: 3, active: true },
+      ])
+      const result = collection.reject(item => item.active)
+      expect(result.toArray()).toEqual([{ id: 2, active: false }])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.reject(() => true).toArray()).toEqual([])
+    })
+  })
+
+  describe('replace()', () => {
+    it('should replace all items', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.replace([4, 5, 6])
+      expect(result.toArray()).toEqual([4, 5, 6])
+    })
+
+    it('should handle empty array', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.replace([]).toArray()).toEqual([])
+    })
+
+    it('should create new collection instance', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.replace([4, 5, 6])
+      expect(result).not.toBe(collection)
+    })
+  })
+
+  describe('replaceRecursive()', () => {
+    it('should recursively replace nested structures', () => {
+      const collection = collect([{
+        id: 1,
+        data: { a: 1, b: [1, 2] },
+      }])
+      const result = collection.replaceRecursive([{
+        id: 2,
+        data: { a: 2, b: [3, 4] },
+      }])
+      expect(result.first()).toEqual({
+        id: 2,
+        data: { a: 2, b: [3, 4] },
+      })
+    })
+
+    it('should handle partial replacements', () => {
+      const collection = collect([{
+        deep: { a: 1, b: 2 },
+      }])
+      const result = collection.replaceRecursive([{
+        deep: { a: 3 },
+      }])
+      expect(result.first()).toEqual({
+        deep: { a: 3 },
+      })
+    })
+
+    it('should handle empty input', () => {
+      const collection = collect([{ a: 1 }])
+      expect(collection.replaceRecursive([]).toArray()).toEqual([])
+    })
+  })
+
+  describe('reverse()', () => {
+    it('should reverse items order', () => {
+      const collection = collect([1, 2, 3, 4])
+      expect(collection.reverse().toArray()).toEqual([4, 3, 2, 1])
+    })
+
+    it('should work with objects', () => {
+      const collection = collect([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+      ])
+      expect(collection.reverse().toArray()).toEqual([
+        { id: 3 },
+        { id: 2 },
+        { id: 1 },
+      ])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.reverse().toArray()).toEqual([])
+    })
+
+    it('should handle single item', () => {
+      const collection = collect([1])
+      expect(collection.reverse().toArray()).toEqual([1])
+    })
+  })
+
+  describe('shift()', () => {
+    it('should remove and return first element', () => {
+      const collection = collect([1, 2, 3])
+      const shifted = collection.shift()
+      expect(shifted).toBe(1)
+      expect(collection.toArray()).toEqual([2, 3])
+    })
+
+    it('should work with objects', () => {
+      const collection = collect([{ id: 1 }, { id: 2 }])
+      const shifted = collection.shift()
+      expect(shifted).toEqual({ id: 1 })
+    })
+
+    it('should return undefined for empty collection', () => {
+      const collection = collect([])
+      expect(collection.shift()).toBeUndefined()
+    })
+  })
+
+  describe('shuffle()', () => {
+    it('should randomize items order', () => {
+      const original = [1, 2, 3, 4, 5]
+      const collection = collect(original)
+      const shuffled = collection.shuffle()
+
+      // Check same elements exist
+      expect(shuffled.sort().toArray()).toEqual(original)
+
+      // Run multiple times to ensure different orders (probabilistic)
+      let foundDifferentOrder = false
+      for (let i = 0; i < 10; i++) {
+        if (JSON.stringify(collection.shuffle().toArray()) !== JSON.stringify(original)) {
+          foundDifferentOrder = true
+          break
+        }
+      }
+      expect(foundDifferentOrder).toBe(true)
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.shuffle().toArray()).toEqual([])
+    })
+
+    it('should maintain object references', () => {
+      const obj1 = { id: 1 }
+      const obj2 = { id: 2 }
+      const collection = collect([obj1, obj2])
+      const shuffled = collection.shuffle()
+      expect(shuffled.contains(obj1)).toBe(true)
+      expect(shuffled.contains(obj2)).toBe(true)
+    })
+  })
+
+  describe('skipUntil()', () => {
+    it('should skip until value found', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      expect(collection.skipUntil(3).toArray()).toEqual([3, 4, 5])
+    })
+
+    it('should work with predicate function', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.skipUntil(item => item > 3)
+      expect(result.toArray()).toEqual([4, 5])
+    })
+
+    it('should handle no match', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.skipUntil(4).toArray()).toEqual([])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.skipUntil(1).toArray()).toEqual([])
+    })
+  })
+
+  describe('skipWhile()', () => {
+    it('should skip while condition is true', () => {
+      const collection = collect([1, 2, 3, 4, 1, 2, 3])
+      const result = collection.skipWhile(item => item < 3)
+      expect(result.toArray()).toEqual([3, 4, 1, 2, 3])
+    })
+
+    it('should work with value comparison', () => {
+      const collection = collect([1, 1, 2, 3, 4])
+      expect(collection.skipWhile(1).toArray()).toEqual([2, 3, 4])
+    })
+
+    it('should handle always true condition', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.skipWhile(() => true).toArray()).toEqual([])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.skipWhile(() => true).toArray()).toEqual([])
+    })
+  })
+
+  describe('slice()', () => {
+    it('should return slice of collection', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      expect(collection.slice(1, 3).toArray()).toEqual([2, 3, 4])
+    })
+
+    it('should work with negative start', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      expect(collection.slice(-3).toArray()).toEqual([3, 4, 5])
+    })
+
+    it('should handle out of bounds indices', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.slice(2, 5).toArray()).toEqual([3])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.slice(1, 3).toArray()).toEqual([])
+    })
+  })
+
+  describe('sole()', () => {
+    it('should return only item in collection', () => {
+      const collection = collect([42])
+      expect(collection.sole()).toBe(42)
+    })
+
+    it('should throw error if collection is empty', () => {
+      const collection = collect([])
+      expect(() => collection.sole()).toThrow('Collection does not contain exactly one item.')
+    })
+
+    it('should throw error if collection has multiple items', () => {
+      const collection = collect([1, 2])
+      expect(() => collection.sole()).toThrow('Collection does not contain exactly one item.')
+    })
+  })
+
+  describe('sortDesc()', () => {
+    it('should sort items in descending order', () => {
+      const collection = collect([1, 4, 2, 5, 3])
+      expect(collection.sortDesc().toArray()).toEqual([5, 4, 3, 2, 1])
+    })
+
+    it('should work with strings', () => {
+      const collection = collect(['banana', 'apple', 'cherry'])
+      expect(collection.sortDesc().toArray()).toEqual(['cherry', 'banana', 'apple'])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.sortDesc().toArray()).toEqual([])
+    })
+
+    it('should preserve null and undefined', () => {
+      const collection = collect([3, null, 1, undefined, 2])
+      expect(collection.sortDesc().toArray()).toEqual([3, 2, 1, null, undefined])
+    })
+  })
+
+  describe('sortKeys()', () => {
+    it('should sort object keys alphabetically', () => {
+      const collection = collect([
+        { c: 1, a: 2, b: 3 },
+      ])
+      expect(collection.sortKeys().first()).toEqual({ a: 2, b: 3, c: 1 })
+    })
+
+    it('should sort all objects in collection', () => {
+      const collection = collect([
+        { z: 1, y: 2 },
+        { b: 3, a: 4 },
+      ])
+      expect(collection.sortKeys().toArray()).toEqual([
+        { y: 2, z: 1 },
+        { a: 4, b: 3 },
+      ])
+    })
+
+    it('should handle empty objects', () => {
+      const collection = collect([{}])
+      expect(collection.sortKeys().toArray()).toEqual([{}])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.sortKeys().toArray()).toEqual([])
+    })
+  })
+
+  describe('sortKeysDesc()', () => {
+    it('should sort object keys in descending order', () => {
+      const collection = collect([
+        { a: 1, c: 2, b: 3 },
+      ])
+      expect(collection.sortKeysDesc().first()).toEqual({ c: 2, b: 3, a: 1 })
+    })
+
+    it('should sort multiple objects', () => {
+      const collection = collect([
+        { x: 1, y: 2 },
+        { a: 3, b: 4 },
+      ])
+      expect(collection.sortKeysDesc().toArray()).toEqual([
+        { y: 2, x: 1 },
+        { b: 4, a: 3 },
+      ])
+    })
+
+    it('should handle empty objects', () => {
+      const collection = collect([{}])
+      expect(collection.sortKeysDesc().toArray()).toEqual([{}])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.sortKeysDesc().toArray()).toEqual([])
+    })
+  })
+
+  describe('splice()', () => {
+    it('should remove and insert elements', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.splice(2, 2, 6, 7)
+      expect(result.toArray()).toEqual([1, 2, 6, 7, 5])
+    })
+
+    it('should only remove elements when no items to insert', () => {
+      const collection = collect([1, 2, 3, 4])
+      expect(collection.splice(1, 2).toArray()).toEqual([1, 4])
+    })
+
+    it('should remove all elements after start when deleteCount is undefined', () => {
+      const collection = collect([1, 2, 3, 4])
+      expect(collection.splice(1).toArray()).toEqual([1])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.splice(0, 1).toArray()).toEqual([])
+    })
+
+    it('should handle out of bounds indices', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.splice(5, 2, 4).toArray()).toEqual([1, 2, 3])
+    })
+  })
+
+  describe('split()', () => {
+    it('should split collection into specified number of groups', () => {
+      const collection = collect([1, 2, 3, 4, 5, 6])
+      const result = collection.split(3)
+      expect(result.toArray()).toEqual([
+        [1, 2],
+        [3, 4],
+        [5, 6],
+      ])
+    })
+
+    it('should handle uneven splits', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      const result = collection.split(3)
+      expect(result.toArray()).toEqual([
+        [1, 2],
+        [3, 4],
+        [5],
+      ])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.split(3).toArray()).toEqual([])
+    })
+
+    it('should handle splitting into one group', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.split(1).toArray()).toEqual([[1, 2, 3]])
+    })
+  })
+
+  describe('takeUntil()', () => {
+    it('should take items until condition met', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      expect(collection.takeUntil(value => value > 3).toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should work with direct value comparison', () => {
+      const collection = collect(['a', 'b', 'c', 'd'])
+      expect(collection.takeUntil('c').toArray()).toEqual(['a', 'b'])
+    })
+
+    it('should handle condition never met', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.takeUntil(value => value > 5).toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.takeUntil(() => true).toArray()).toEqual([])
+    })
+  })
+
+  describe('takeWhile()', () => {
+    it('should take items while condition is true', () => {
+      const collection = collect([1, 2, 3, 4, 1, 2, 3])
+      expect(collection.takeWhile(value => value < 4).toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should work with direct value comparison', () => {
+      const collection = collect([1, 1, 2, 3, 1])
+      expect(collection.takeWhile(1).toArray()).toEqual([1, 1])
+    })
+
+    it('should handle always true condition', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.takeWhile(() => true).toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.takeWhile(() => true).toArray()).toEqual([])
+    })
+  })
+
+  describe('times()', () => {
+    it('should execute callback specified number of times', () => {
+      const collection = collect([]).times(3, i => i + 1)
+      expect(collection.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should work with complex return values', () => {
+      const result = collect([]).times(2, i => ({ id: i, value: i * 2 }))
+      expect(result.toArray()).toEqual([
+        { id: 0, value: 0 },
+        { id: 1, value: 2 },
+      ])
+    })
+
+    it('should handle zero times', () => {
+      const collection = collect([]).times(0, i => i)
+      expect(collection.toArray()).toEqual([])
+    })
+
+    it('should handle negative count', () => {
+      const collection = collect([]).times(-1, i => i)
+      expect(collection.toArray()).toEqual([])
+    })
+  })
+
+  describe('undot()', () => {
+    it('should convert dot notation to nested objects', () => {
+      const collection = collect([
+        { 'user.name': 'John', 'user.age': 30 },
+      ])
+      expect(collection.undot().first()).toEqual({
+        user: {
+          name: 'John',
+          age: 30,
+        },
+      })
+    })
+
+    it('should handle multiple levels of nesting', () => {
+      const collection = collect([
+        { 'a.b.c': 1, 'a.b.d': 2, 'a.e': 3 },
+      ])
+      expect(collection.undot().first()).toEqual({
+        a: {
+          b: {
+            c: 1,
+            d: 2,
+          },
+          e: 3,
+        },
+      })
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect([])
+      expect(collection.undot().toArray()).toEqual([{}])
+    })
+
+    it('should handle non-dot keys', () => {
+      const collection = collect([{ 'normal': 1, 'with.dot': 2 }])
+      expect(collection.undot().first()).toEqual({
+        normal: 1,
+        with: { dot: 2 },
+      })
+    })
+  })
+
+  describe('unlessEmpty()', () => {
+    it('should execute callback if collection is not empty', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.unlessEmpty(col => col.map(x => x * 2))
+      expect(result.toArray()).toEqual([2, 4, 6])
+    })
+
+    it('should not execute callback if collection is empty', () => {
+      const collection = collect([])
+      const result = collection.unlessEmpty(col => col.map(x => x * 2))
+      expect(result.toArray()).toEqual([])
+    })
+
+    it('should preserve original collection when empty', () => {
+      const collection = collect([])
+      const result = collection.unlessEmpty(() => collect([1, 2, 3]))
+      expect(result.toArray()).toEqual([])
+    })
+  })
+
+  describe('unlessNotEmpty()', () => {
+    it('should execute callback if collection is empty', () => {
+      const collection = collect([])
+      const result = collection.unlessNotEmpty(() => collect([1, 2, 3]))
+      expect(result.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should not execute callback if collection is not empty', () => {
+      const collection = collect([1, 2])
+      const result = collection.unlessNotEmpty(() => collect([3, 4]))
+      expect(result.toArray()).toEqual([1, 2])
+    })
+  })
+
+  describe('unwrap()', () => {
+    it('should unwrap collection to array', () => {
+      const collection = collect([1, 2, 3])
+      expect(collection.unwrap(collection)).toEqual([1, 2, 3])
+    })
+
+    it('should handle regular arrays', () => {
+      const collection = collect([])
+      expect(collection.unwrap([1, 2, 3])).toEqual([1, 2, 3])
+    })
+
+    it('should wrap single values in array', () => {
+      const collection = collect([])
+      expect(collection.unwrap(42)).toEqual([42])
+    })
+  })
+
+  describe('whenEmpty()', () => {
+    it('should execute callback when collection is empty', () => {
+      const collection = collect([])
+      const result = collection.whenEmpty(() => collect([1, 2, 3]))
+      expect(result.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should not execute callback when collection is not empty', () => {
+      const collection = collect([1, 2])
+      const result = collection.whenEmpty(() => collect([3, 4]))
+      expect(result.toArray()).toEqual([1, 2])
+    })
+  })
+
+  describe('whenNotEmpty()', () => {
+    it('should execute callback when collection is not empty', () => {
+      const collection = collect([1, 2])
+      const result = collection.whenNotEmpty(col => col.map(x => x * 2))
+      expect(result.toArray()).toEqual([2, 4])
+    })
+
+    it('should not execute callback when collection is empty', () => {
+      const collection = collect([])
+      const result = collection.whenNotEmpty(() => collect([1, 2]))
+      expect(result.toArray()).toEqual([])
+    })
+  })
+
+  describe('wrap()', () => {
+    it('should wrap value in collection', () => {
+      const collection = collect([])
+      const result = collection.wrap(42)
+      expect(result.toArray()).toEqual([42])
+    })
+
+    it('should wrap array in collection', () => {
+      const collection = collect([])
+      const result = collection.wrap([1, 2, 3])
+      expect(result.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should handle null and undefined', () => {
+      const collection = collect([])
+      expect(collection.wrap(null).toArray()).toEqual([null])
+      expect(collection.wrap(undefined).toArray()).toEqual([undefined])
+    })
+  })
+
+  describe('zip()', () => {
+    it('should zip arrays together', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.zip(['a', 'b', 'c'])
+      expect(result.toArray()).toEqual([[1, 'a'], [2, 'b'], [3, 'c']])
+    })
+
+    it('should handle arrays of different lengths', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.zip(['a', 'b'])
+      expect(result.toArray()).toEqual([[1, 'a'], [2, 'b'], [3, undefined]])
+    })
+
+    it('should handle empty arrays', () => {
+      const collection = collect([])
+      expect(collection.zip([]).toArray()).toEqual([])
+    })
+
+    it('should handle complex types', () => {
+      const collection = collect([{ id: 1 }, { id: 2 }])
+      const result = collection.zip([{ value: 'a' }, { value: 'b' }])
+      expect(result.toArray()).toEqual([
+        [{ id: 1 }, { value: 'a' }],
+        [{ id: 2 }, { value: 'b' }],
+      ])
+    })
+  })
 })
 
 describe('Collection Element Access', () => {

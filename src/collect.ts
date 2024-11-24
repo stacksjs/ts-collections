@@ -73,24 +73,26 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collection.length === 1
     },
 
-    countBy<K extends keyof T>(key: K) {
+    countBy<K extends keyof T>(key: K | ((item: T) => T[K])): Map<T[K], number> {
       const counts = new Map<T[K], number>()
+
       for (const item of collection.items) {
-        const value = item[key]
+        // Handle both key string and callback function
+        const value = typeof key === 'function'
+          ? (key as (item: T) => T[K])(item)
+          : item[key as K]
+
         counts.set(value, (counts.get(value) || 0) + 1)
       }
+
       return counts
     },
 
-    diffAssoc(other: T[] | CollectionOperations<T>) {
+    diffAssoc(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
       const otherItems = Array.isArray(other) ? other : other.items
       return collect(
-        collection.items.filter(item =>
-          !otherItems.some(otherItem =>
-            Object.entries(item as any).every(([key, value]) =>
-              (otherItem as any)[key] === value,
-            ),
-          ),
+        collection.items.filter((item, index) =>
+          otherItems[index] === undefined || JSON.stringify(item) !== JSON.stringify(otherItems[index]),
         ),
       )
     },
@@ -116,7 +118,12 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     doesntContain(keyOrItem: keyof T | T, value?: any): boolean {
-      return !this.contains(keyOrItem as any, value)
+      if (arguments.length === 1) {
+        return !collection.items.includes(keyOrItem as T)
+      }
+      return !collection.items.some(item =>
+        item[keyOrItem as keyof T] === value,
+      )
     },
 
     duplicates<K extends keyof T>(key?: K) {
@@ -177,17 +184,36 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(flat(collection.items, depth))
     },
 
-    flip<R = { [K in keyof T as T[K] extends string | number ? T[K] : never]: K }>(): CollectionOperations<R> {
-      const result = {} as any
-      for (const item of collection.items) {
-        const entries = Object.entries(item as any)
-        for (const [key, value] of entries) {
-          if (typeof value === 'string' || typeof value === 'number') {
-            result[value] = key
-          }
-        }
+    flip<R extends Record<string | number, string | number> = {
+      [K in Extract<keyof T, string | number> as T[K] extends string | number ? T[K] : never]: K
+    }>(): CollectionOperations<R> {
+      // Handle empty collection
+      if (this.items.length === 0) {
+        return collect([] as R[])
       }
-      return collect([result]) as CollectionOperations<R>
+
+      const flipped: Record<string | number, string | number> = {}
+
+      // Type guard to ensure item is an object with string or number values
+      function isFlippable(item: any): item is Record<string, string | number> {
+        if (typeof item !== 'object' || item === null)
+          return false
+        return Object.values(item).every(
+          value => typeof value === 'string' || typeof value === 'number',
+        )
+      }
+
+      this.items.forEach((item) => {
+        if (isFlippable(item)) {
+          Object.entries(item).forEach(([key, value]) => {
+            flipped[value] = key
+          })
+        }
+        // If item is not flippable, ignore or handle as needed
+      })
+
+      // Return the flipped object as a single-item collection
+      return collect([flipped] as R[])
     },
 
     forget<K extends keyof T>(key: K): CollectionOperations<Omit<T, K>> {
@@ -200,9 +226,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       ) as unknown as CollectionOperations<Omit<T, K>>
     },
 
-    get<K extends keyof T>(key: K, defaultValue?: T[K]) {
+    get<K extends keyof T>(key: K, defaultValue?: T[K]): T[K] | undefined {
       const item = collection.items[0]
-      return item ? item[key] : defaultValue
+      return item ? (item[key] !== undefined ? item[key] : defaultValue) : defaultValue
     },
 
     has<K extends keyof T>(key: K): boolean {
@@ -216,8 +242,12 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     macro(name: string, callback: (...args: any[]) => any): void {
-      const operations = createCollectionOperations(collection)
-        ; (operations as any)[name] = callback
+      Object.defineProperty(this, name, {
+        value: callback.bind(this),
+        enumerable: false,
+        configurable: true,
+        writable: true,
+      })
     },
 
     make<U>(items: U[]) {
@@ -253,28 +283,43 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect([...collection.items, ...otherItems])
     },
 
-    mergeRecursive(other: T[] | CollectionOperations<T>) {
-      const otherItems = Array.isArray(other) ? other : other.items
-
-      function mergeDeep(target: any, source: any): any {
-        if (typeof target !== 'object' || typeof source !== 'object')
+    mergeRecursive(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
+      function mergeRecursiveHelper(target: any, source: any): any {
+        if (source === undefined || source === null)
+          return target
+        if (Array.isArray(source)) {
+          // For arrays, just use the source array directly
+          return [...source]
+        }
+        if (typeof source !== 'object')
           return source
-        for (const key in source) {
-          if (typeof source[key] === 'object' && key in target) {
-            target[key] = mergeDeep(target[key], source[key])
+
+        const result = Array.isArray(target) ? [...target] : { ...target }
+
+        for (const key of Object.keys(source)) {
+          if (Array.isArray(source[key])) {
+            // For array properties, use source array directly
+            result[key] = [...source[key]]
+          }
+          else if (source[key] && typeof source[key] === 'object') {
+            result[key] = target[key]
+              ? mergeRecursiveHelper(target[key], source[key])
+              : { ...source[key] }
           }
           else {
-            target[key] = source[key]
+            result[key] = source[key]
           }
         }
-        return target
+        return result
       }
 
-      return collect(
-        collection.items.map((item, index) =>
-          mergeDeep({ ...item }, otherItems[index] || {}),
-        ),
-      )
+      const otherItems = Array.isArray(other) ? other : other.items
+      const merged = collection.items.map((item, index) => {
+        return index < otherItems.length
+          ? mergeRecursiveHelper(item, otherItems[index])
+          : { ...item }
+      })
+      return collect(merged)
     },
 
     only<K extends keyof T>(...keys: K[]) {
@@ -363,9 +408,12 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect([...collection.items].reverse())
     },
 
-    shift() {
-      const copy = [...collection.items]
-      return copy.shift()
+    shift(): T | undefined {
+      if (collection.length === 0)
+        return undefined
+      const value = collection.items[0]
+      collection.items.splice(0, 1)
+      return value
     },
 
     shuffle() {
@@ -448,8 +496,11 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       )
     },
 
-    splice(start: number, deleteCount?: number, ...items: T[]) {
+    splice(start: number, deleteCount?: number, ...items: T[]): CollectionOperations<T> {
       const copy = [...collection.items]
+      if (start > copy.length) {
+        return collect(copy)
+      }
       if (deleteCount === undefined) {
         copy.splice(start)
       }

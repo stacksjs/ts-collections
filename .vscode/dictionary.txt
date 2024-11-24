@@ -16,6 +16,7 @@ destructurable
 doesnt
 dtsx
 entrypoints
+Flippable
 heroicons
 kmeans
 Laravel

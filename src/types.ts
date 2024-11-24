@@ -215,7 +215,9 @@ export interface CollectionOperations<T> extends Collection<T> {
   firstOrFail: () => T
   firstWhere: <K extends keyof T>(key: K, value: T[K]) => T | undefined
   flatten: (depth?: number) => CollectionOperations<T extends Array<infer U> ? U : T>
-  flip: <R = { [K in keyof T as T[K] extends string | number ? T[K] : never]: K }>() => CollectionOperations<R>
+  flip: <R extends Record<string | number, string | number> = {
+    [K in Extract<keyof T, string | number> as T[K] extends string | number ? T[K] : never]: K
+  }>() => CollectionOperations<R>
   forget: <K extends keyof T>(key: K) => CollectionOperations<Omit<T, K>>
   get: <K extends keyof T>(key: K, defaultValue?: T[K]) => T[K] | undefined
   has: <K extends keyof T>(key: K) => boolean
