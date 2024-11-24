@@ -1225,6 +1225,7 @@ describe('Collection Core Operations', () => {
 
     it('should handle empty collection', () => {
       const collection = collect([])
+      // @ts-expect-error Testing with invalid types
       expect(collection.skipUntil(1).toArray()).toEqual([])
     })
   })

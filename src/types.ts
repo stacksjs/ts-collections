@@ -265,13 +265,13 @@ export interface CollectionOperations<T> extends Collection<T> {
   takeWhile: (value: T | ((item: T) => boolean)) => CollectionOperations<T>
   times: <U>(count: number, callback: (index: number) => U) => CollectionOperations<U>
   undot: () => CollectionOperations<Record<string, any>>
-  unlessEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
-  unlessNotEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
-  unwrap: <U>(value: U | CollectionOperations<U>) => U[]
-  whenEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
-  whenNotEmpty: (callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
+  unlessEmpty: <U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>) => CollectionOperations<T | U>
+  unlessNotEmpty: <U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>) => CollectionOperations<T | U>
+  unwrap: <U>(value: U | U[] | CollectionOperations<U>) => U extends any[] ? U : U[]
+  whenEmpty: <U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>) => CollectionOperations<T | U>
+  whenNotEmpty: <U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>) => CollectionOperations<T | U>
   wrap: <U>(value: U | U[]) => CollectionOperations<U>
-  zip: <U>(array: U[]) => CollectionOperations<[T, U]>
+  zip: <U>(array: U[]) => CollectionOperations<[T, U | undefined]>
 
   // Transformations
   map: <U>(callback: (item: T, index: number) => U) => CollectionOperations<U>

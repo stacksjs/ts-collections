@@ -35,6 +35,7 @@ Spatie
 stacksjs
 stringifying
 typecheck
+undefineds
 undot
 unplugin
 unref
