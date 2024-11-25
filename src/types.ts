@@ -207,8 +207,8 @@ export interface CollectionOperations<T> extends Collection<T> {
   }
   containsOneItem: () => boolean
   containsAll: {
-    (items: Array<T | undefined>): boolean;  // Handle direct items check with optional undefined
-    <K extends keyof T>(key: K, values: Array<T[K] | undefined>): boolean;  // Handle key/value check
+    (items: Array<T | undefined>): boolean // Handle direct items check with optional undefined
+    <K extends keyof T>(key: K, values: Array<T[K] | undefined>): boolean // Handle key/value check
   }
   countBy: {
     <K extends keyof T>(key: K): Map<T[K], number>
@@ -246,11 +246,14 @@ export interface CollectionOperations<T> extends Collection<T> {
   only: <K extends string>(...keys: K[]) => CollectionOperations<{
     [P in K & keyof T]?: T[P]
   }>
-  pad: (size: number, value: T) => CollectionOperations<T>
+  // eslint-disable-next-line ts/method-signature-style
+  pad<U = T>(size: number, value: U): CollectionOperations<T | U>
   pop: () => T | undefined
-  prepend: (value: T) => CollectionOperations<T>
+  // eslint-disable-next-line ts/method-signature-style
+  prepend<U = T>(value: U): CollectionOperations<T | U>
   pull: <K extends keyof T>(key: K) => T[K] | undefined
-  push: (value: T) => CollectionOperations<T>
+  // eslint-disable-next-line ts/method-signature-style
+  push<U = T>(value: U): CollectionOperations<T | U>
   // First overload handles existing keys
   // eslint-disable-next-line ts/method-signature-style
   put<K extends keyof T>(key: K, value: T[K]): CollectionOperations<T>

@@ -385,24 +385,24 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       })
     },
 
-    pad(size: number, value: T) {
-      const result = [...collection.items]
+    pad<U = T>(size: number, value: U): CollectionOperations<T | U> {
+      const result: Array<T | U> = collection.items.map(item => item as T | U)
       const padSize = Math.abs(size)
-      const padValue = value
 
       while (result.length < padSize) {
-        size > 0 ? result.push(padValue) : result.unshift(padValue)
+        size > 0 ? result.push(value) : result.unshift(value)
       }
 
-      return collect(result)
+      return collect<T | U>(result)
     },
 
     pop() {
       return collection.items.pop()
     },
 
-    prepend(value: T) {
-      return collect([value, ...collection.items])
+    prepend<U = T>(value: U): CollectionOperations<T | U> {
+      const result: Array<T | U> = [value, ...collection.items.map(item => item as T | U)]
+      return collect<T | U>(result)
     },
 
     pull<K extends keyof T>(key: K) {
@@ -410,8 +410,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return item ? item[key] : undefined
     },
 
-    push(value: T) {
-      return collect([...collection.items, value])
+    push<U = T>(value: U): CollectionOperations<T | U> {
+      const result: Array<T | U> = [...collection.items.map(item => item as T | U), value]
+      return collect<T | U>(result)
     },
 
     put<K extends string, V>(key: K, value: V): CollectionOperations<any> {
