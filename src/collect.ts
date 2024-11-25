@@ -81,6 +81,26 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collection.length === 1
     },
 
+    containsAll<K extends keyof T>(
+      itemsOrKey: Array<T | undefined> | K,
+      values?: Array<T[K] | undefined>
+    ): boolean {
+      if (arguments.length === 1) {
+        // Check direct items
+        const items = itemsOrKey as Array<T | undefined>
+        return items.every(item =>
+          item === undefined
+            ? collection.items.includes(undefined as T)
+            : collection.items.includes(item)
+        )
+      }
+      // Check by key/values
+      const key = itemsOrKey as K
+      return (values || []).every(value =>
+        collection.items.some(item => item[key] === value)
+      )
+    },
+
     countBy<K extends keyof T | string | number>(
       keyOrCallback: K | ((item: T) => K extends keyof T ? T[K] : string | number),
     ): Map<any, number> {

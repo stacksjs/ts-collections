@@ -282,6 +282,57 @@ describe('Collection Core Operations', () => {
     })
   })
 
+  describe('containsAll', () => {
+    it('should check if collection contains all direct values', () => {
+      const collection = collect([1, 2, 3, 4, 5])
+      expect(collection.containsAll([1, 2])).toBe(true)
+      expect(collection.containsAll([1, 6])).toBe(false)
+    })
+
+    it('should check if collection contains all values for a given key', () => {
+      interface TestItem {
+        id: number
+        name: string
+      }
+      const collection = collect<TestItem>([
+        { id: 1, name: 'A' },
+        { id: 2, name: 'B' },
+        { id: 3, name: 'C' },
+      ])
+      expect(collection.containsAll('id', [1, 2])).toBe(true)
+      expect(collection.containsAll('id', [1, 4])).toBe(false)
+      expect(collection.containsAll('name', ['A', 'B'])).toBe(true)
+      expect(collection.containsAll('name', ['A', 'D'])).toBe(false)
+    })
+
+    it('should handle empty input', () => {
+      interface TestItem {
+        id: number
+      }
+      const collection = collect<TestItem>([{ id: 1 }, { id: 2 }, { id: 3 }])
+      expect(collection.containsAll([])).toBe(true)
+      expect(collection.containsAll('id', [])).toBe(true)
+    })
+
+    it('should handle undefined values', () => {
+      const collection = collect([1, 2, undefined, 3])
+      expect(collection.containsAll([1, undefined])).toBe(true)
+      expect(collection.containsAll([1, 4])).toBe(false)
+    })
+
+    it('should work with object collections', () => {
+      interface TestItem {
+        id: number
+      }
+      const obj1: TestItem = { id: 1 }
+      const obj2: TestItem = { id: 2 }
+      const collection = collect<TestItem>([obj1, obj2])
+      expect(collection.containsAll([obj1])).toBe(true)
+      expect(collection.containsAll([obj1, obj2])).toBe(true)
+      expect(collection.containsAll([{ id: 1 }])).toBe(false) // Different object reference
+    })
+  })
+
   describe('countBy()', () => {
     it('should count occurrences by primitive values', () => {
       const collection = collect([1, 1, 2, 2, 2, 3])

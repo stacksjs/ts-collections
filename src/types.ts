@@ -203,6 +203,10 @@ export interface CollectionOperations<T> extends Collection<T> {
   combine: <U>(values: U[]) => CollectionOperations<Record<string, U | undefined>>
   contains: ((item: T) => boolean) & (<K extends keyof T>(key: K, value: T[K]) => boolean)
   containsOneItem: () => boolean
+  containsAll: {
+    (items: Array<T | undefined>): boolean;  // Handle direct items check with optional undefined
+    <K extends keyof T>(key: K, values: Array<T[K] | undefined>): boolean;  // Handle key/value check
+  }
   countBy: {
     <K extends keyof T>(key: K): Map<T[K], number>
     <U extends string | number>(callback: (item: T) => U): Map<U, number>
