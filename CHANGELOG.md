@@ -1,6 +1,29 @@
 # Changelog
 
 
+## v0.1.0...main
+
+[compare changes](https://github.com/stacksjs/ts-starter/compare/v0.1.0...main)
+
+### 🏡 Chore
+
+- Add changelog ([e56fb41](https://github.com/stacksjs/ts-starter/commit/e56fb41))
+- Add more basic tests ([5a46d8a](https://github.com/stacksjs/ts-starter/commit/5a46d8a))
+- Improve typing ([c6d5d8c](https://github.com/stacksjs/ts-starter/commit/c6d5d8c))
+- Improve mergeRecursive ([7d24ca2](https://github.com/stacksjs/ts-starter/commit/7d24ca2))
+- Improve `only` typing ([def59b8](https://github.com/stacksjs/ts-starter/commit/def59b8))
+- Improve several types ([f709158](https://github.com/stacksjs/ts-starter/commit/f709158))
+- Add `containsAll` ([934843b](https://github.com/stacksjs/ts-starter/commit/934843b))
+- Improve types ([b190416](https://github.com/stacksjs/ts-starter/commit/b190416))
+- Adjust types to handle empty collections ([4b290b1](https://github.com/stacksjs/ts-starter/commit/4b290b1))
+- Improve replaceRecursive typing ([72414d5](https://github.com/stacksjs/ts-starter/commit/72414d5))
+- Suppress two errors ([bc27001](https://github.com/stacksjs/ts-starter/commit/bc27001))
+- Minify build ([9ddcb2d](https://github.com/stacksjs/ts-starter/commit/9ddcb2d))
+
+### ❤️ Contributors
+
+- Chris ([@chrisbbreuer](http://github.com/chrisbbreuer))
+
 ## ...main
 
 
