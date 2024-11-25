@@ -85,7 +85,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     containsAll<K extends keyof T>(
       itemsOrKey: Array<T | undefined> | K,
-      values?: Array<T[K] | undefined>
+      values?: Array<T[K] | undefined>,
     ): boolean {
       if (arguments.length === 1) {
         // Check direct items
@@ -93,13 +93,13 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         return items.every(item =>
           item === undefined
             ? collection.items.includes(undefined as T)
-            : collection.items.includes(item)
+            : collection.items.includes(item),
         )
       }
       // Check by key/values
       const key = itemsOrKey as K
       return (values || []).every(value =>
-        collection.items.some(item => item[key] === value)
+        collection.items.some(item => item[key] === value),
       )
     },
 
@@ -440,7 +440,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(items)
     },
 
-    replaceRecursive(items: T[]) {
+    replaceRecursive<U>(items: U[]): CollectionOperations<U> {
       function replaceDeep(target: any, source: any): any {
         if (!source || typeof source !== 'object')
           return source

@@ -1162,9 +1162,11 @@ describe('Collection Core Operations', () => {
       const collection = collect([{
         deep: { a: 1, b: 2 },
       }])
+
       const result = collection.replaceRecursive([{
         deep: { a: 3 },
       }])
+
       expect(result.first()).toEqual({
         deep: { a: 3 },
       })

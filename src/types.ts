@@ -263,7 +263,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   random: (size?: number) => CollectionOperations<T>
   reject: (predicate: (item: T) => boolean) => CollectionOperations<T>
   replace: (items: T[]) => CollectionOperations<T>
-  replaceRecursive: (items: T[]) => CollectionOperations<T>
+  replaceRecursive: <U>(items: U[]) => CollectionOperations<U>
   reverse: () => CollectionOperations<T>
   shift: () => T | undefined
   shuffle: () => CollectionOperations<T>
