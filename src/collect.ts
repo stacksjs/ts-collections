@@ -70,8 +70,10 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect([result]) as any
     },
 
-    contains(keyOrItem: keyof T | T, value?: any): boolean {
+    contains(keyOrItem: T | keyof T | undefined, value?: any): boolean {
       if (arguments.length === 1) {
+        if (keyOrItem === undefined)
+          return false
         return collection.items.includes(keyOrItem as T)
       }
       return collection.items.some(item => item[keyOrItem as keyof T] === value)
@@ -412,10 +414,10 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect([...collection.items, value])
     },
 
-    put<K extends keyof T>(key: K, value: T[K]): CollectionOperations<T> {
+    put<K extends string, V>(key: K, value: V): CollectionOperations<any> {
       return collect(
         collection.items.map(item => ({ ...item, [key]: value })),
-      ) as unknown as CollectionOperations<T>
+      )
     },
 
     random(size?: number) {
@@ -621,27 +623,27 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect([result])
     },
 
-    unlessEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
-      return this.isNotEmpty() ? callback(this) : this
+    unlessEmpty<U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>): CollectionOperations<T | U> {
+      return this.isNotEmpty() ? callback(this) as CollectionOperations<T | U> : this as CollectionOperations<T | U>
     },
 
-    unlessNotEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
-      return this.isEmpty() ? callback(this) : this
+    unlessNotEmpty<U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>): CollectionOperations<T | U> {
+      return this.isEmpty() ? callback(this) as CollectionOperations<T | U> : this as CollectionOperations<T | U>
     },
 
-    unwrap<U>(value: U | CollectionOperations<U>): U[] {
+    unwrap<U>(value: U | U[] | CollectionOperations<U>): U extends any[] ? U : U[] {
       if (value instanceof Object && 'items' in value) {
-        return (value as CollectionOperations<U>).toArray()
+        return (value as CollectionOperations<U>).toArray() as U extends any[] ? U : U[]
       }
-      return Array.isArray(value) ? value : [value]
+      return (Array.isArray(value) ? value : [value]) as U extends any[] ? U : U[]
     },
 
-    whenEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
-      return this.isEmpty() ? callback(this) : this
+    whenEmpty<U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>): CollectionOperations<T | U> {
+      return this.isEmpty() ? callback(this) as CollectionOperations<T | U> : this as CollectionOperations<T | U>
     },
 
-    whenNotEmpty(callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) {
-      return this.isNotEmpty() ? callback(this) : this
+    whenNotEmpty<U = T>(callback: (collection: CollectionOperations<T>) => CollectionOperations<U>): CollectionOperations<T | U> {
+      return this.isNotEmpty() ? callback(this) as CollectionOperations<T | U> : this as CollectionOperations<T | U>
     },
 
     wrap<U>(value: U | U[]): CollectionOperations<U> {
@@ -651,9 +653,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect([value])
     },
 
-    zip<U>(array: U[]): CollectionOperations<[T, U]> {
+    zip<U>(array: U[]): CollectionOperations<[T, U | undefined]> {
       return collect(
-        collection.items.map((item, index) => [item, array[index]] as [T, U]),
+        collection.items.map((item, index) => [item, array[index]] as [T, U | undefined]),
       )
     },
 

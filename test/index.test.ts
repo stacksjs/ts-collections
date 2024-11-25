@@ -1015,6 +1015,7 @@ describe('Collection Core Operations', () => {
 
     it('should return undefined if key not found', () => {
       const collection = collect([{ a: 1 }])
+      // @ts-expect-error Testing with invalid typing
       expect(collection.pull('b')).toBeUndefined()
     })
 
@@ -1064,6 +1065,7 @@ describe('Collection Core Operations', () => {
 
     it('should handle empty collection', () => {
       const collection = collect([])
+      // @ts-expect-error Testing with invalid typing
       expect(collection.put('key', 'value').toArray()).toEqual([])
     })
   })
@@ -1073,7 +1075,9 @@ describe('Collection Core Operations', () => {
       const collection = collect([1, 2, 3, 4, 5])
       const result = collection.random()
       expect(result.count()).toBe(1)
-      expect(collection.contains(result.first())).toBe(true)
+      const firstItem = result.first()
+      expect(firstItem).not.toBeUndefined() // Type guard
+      expect(collection.contains(firstItem)).toBe(true)
     })
 
     it('should return multiple random items when size specified', () => {

@@ -201,7 +201,10 @@ export interface CollectionOperations<T> extends Collection<T> {
   average: (key?: keyof T) => number // alias for avg
   collapse: () => CollectionOperations<T extends Array<infer U> ? U : T>
   combine: <U>(values: U[]) => CollectionOperations<Record<string, U | undefined>>
-  contains: ((item: T) => boolean) & (<K extends keyof T>(key: K, value: T[K]) => boolean)
+  contains: {
+    (item: T | undefined): boolean
+    <K extends keyof T>(key: K, value: T[K]): boolean
+  }
   containsOneItem: () => boolean
   containsAll: {
     (items: Array<T | undefined>): boolean;  // Handle direct items check with optional undefined
@@ -248,7 +251,12 @@ export interface CollectionOperations<T> extends Collection<T> {
   prepend: (value: T) => CollectionOperations<T>
   pull: <K extends keyof T>(key: K) => T[K] | undefined
   push: (value: T) => CollectionOperations<T>
-  put: <K extends keyof T>(key: K, value: T[K]) => CollectionOperations<T>
+  // First overload handles existing keys
+  // eslint-disable-next-line ts/method-signature-style
+  put<K extends keyof T>(key: K, value: T[K]): CollectionOperations<T>
+  // Second overload handles new keys
+  // eslint-disable-next-line ts/method-signature-style
+  put<K extends string, V>(key: Exclude<K, keyof T>, value: V): CollectionOperations<T & Record<K, V>>
   random: (size?: number) => CollectionOperations<T>
   reject: (predicate: (item: T) => boolean) => CollectionOperations<T>
   replace: (items: T[]) => CollectionOperations<T>
