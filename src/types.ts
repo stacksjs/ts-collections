@@ -383,7 +383,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   slug: (this: CollectionOperations<string>) => CollectionOperations<string>
 
   // Set Operations
-  symmetricDiff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  symmetricDiff: <U>(other: T[] | CollectionOperations<T> | U[] | CollectionOperations<U>) => CollectionOperations<T | U>
   cartesianProduct: <U>(other: U[] | CollectionOperations<U>) => CollectionOperations<[T, U]>
   power: () => CollectionOperations<CollectionOperations<T>>
 

@@ -1306,18 +1306,20 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     symmetricDiff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
-      const otherSet = new Set(Array.isArray(other) ? other : other.items)
+      const otherItems = Array.isArray(other) ? other : other.items
+      const thisSet = new Set(this.items)
+      const otherSet = new Set(otherItems)
+
       const result: T[] = []
 
-      // Items in this collection but not in other
-      for (const item of collection.items) {
+      // Add items that are in this but not in other
+      for (const item of thisSet) {
         if (!otherSet.has(item)) {
           result.push(item)
         }
       }
 
-      // Items in other but not in this collection
-      const thisSet = new Set(collection.items)
+      // Add items that are in other but not in this
       for (const item of otherSet) {
         if (!thisSet.has(item)) {
           result.push(item)

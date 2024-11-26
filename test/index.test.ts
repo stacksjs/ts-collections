@@ -4745,22 +4745,246 @@ describe('String Operations', () => {
   })
 })
 
-// describe('Set Operations', () => {
-//   describe('symmetricDiff()', () => {
-//     it('should find symmetric difference', () => expect(true).toBe(true))
-//     it('should work with collections and arrays', () => expect(true).toBe(true))
-//   })
+describe('Set Operations', () => {
+  describe('symmetricDiff()', () => {
+    it('should find symmetric difference', () => {
+      const collection1 = collect([1, 2, 3, 4, 5])
+      const collection2 = collect([4, 5, 6, 7, 8])
 
-//   describe('cartesianProduct()', () => {
-//     it('should compute cartesian product', () => expect(true).toBe(true))
-//     it('should handle empty collections', () => expect(true).toBe(true))
-//   })
+      const result = collection1.symmetricDiff(collection2)
+      expect(result.toArray()).toEqual([1, 2, 3, 6, 7, 8])
+    })
 
-//   describe('power()', () => {
-//     it('should compute power set', () => expect(true).toBe(true))
-//     it('should include empty set', () => expect(true).toBe(true))
-//   })
-// })
+    it('should work with collections and arrays', () => {
+      const collection = collect([1, 2, 3, 4])
+      const array = [3, 4, 5, 6]
+
+      const result1 = collection.symmetricDiff(array)
+      const result2 = collection.symmetricDiff(collect(array))
+
+      expect(result1.toArray()).toEqual([1, 2, 5, 6])
+      expect(result2.toArray()).toEqual([1, 2, 5, 6])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([1, 2, 3])
+      const empty = collect([])
+
+      expect(collection.symmetricDiff(empty).toArray()).toEqual([1, 2, 3])
+      expect(empty.symmetricDiff(collection).toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([1, 2, 3])
+      const empty = collect([])
+
+      expect(collection.symmetricDiff(empty).toArray()).toEqual([1, 2, 3])
+      expect(empty.symmetricDiff(collection).toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should enforce type safety with empty collections', () => {
+      const empty = collect([])
+      const numbers = collect([1, 2, 3])
+      const strings = collect(['a', 'b', 'c'])
+
+      // These should all type-check correctly
+      const result1 = numbers.symmetricDiff(empty).first()
+      const result2 = empty.symmetricDiff(numbers).first()
+
+      // Actually use result2 to avoid unused variable warning
+      expect(result1).toBe(1)
+      expect(result2).toBe(1)
+
+      numbers.symmetricDiff(strings)
+    })
+
+    it('should handle identical collections', () => {
+      const collection1 = collect([1, 2, 3])
+      const collection2 = collect([1, 2, 3])
+
+      expect(collection1.symmetricDiff(collection2).toArray()).toEqual([])
+    })
+
+    it('should handle collections with duplicates', () => {
+      const collection1 = collect([1, 1, 2, 2, 3])
+      const collection2 = collect([2, 2, 3, 3, 4])
+
+      expect(collection1.symmetricDiff(collection2).toArray()).toEqual([1, 4])
+    })
+
+    it('should preserve type safety', () => {
+      const numbers = collect([1, 2, 3])
+      const strings = collect(['a', 'b', 'c'])
+
+      numbers.symmetricDiff(strings)
+    })
+  })
+
+  describe('cartesianProduct()', () => {
+    it('should compute cartesian product', () => {
+      const collection1 = collect([1, 2])
+      const collection2 = collect(['a', 'b'])
+
+      const result = collection1.cartesianProduct(collection2)
+      expect(result.toArray()).toEqual([
+        [1, 'a'],
+        [1, 'b'],
+        [2, 'a'],
+        [2, 'b'],
+      ])
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect([1, 2])
+      const empty = collect([])
+
+      expect(collection.cartesianProduct(empty).toArray()).toEqual([])
+      expect(empty.cartesianProduct(collection).toArray()).toEqual([])
+    })
+
+    it('should work with collections and arrays', () => {
+      const collection = collect([1, 2])
+      const array = ['a', 'b']
+
+      const result = collection.cartesianProduct(array)
+      expect(result.toArray()).toEqual([
+        [1, 'a'],
+        [1, 'b'],
+        [2, 'a'],
+        [2, 'b'],
+      ])
+    })
+
+    it('should handle single-element collections', () => {
+      const collection1 = collect([1])
+      const collection2 = collect(['a', 'b'])
+
+      expect(collection1.cartesianProduct(collection2).toArray()).toEqual([
+        [1, 'a'],
+        [1, 'b'],
+      ])
+    })
+
+    it('should preserve type information', () => {
+      const numbers = collect([1, 2])
+      const strings = collect(['a', 'b'])
+
+      const result = numbers.cartesianProduct(strings)
+      const item = result.first()!
+      expect(item).toEqual([1, 'a'])
+    })
+
+    it('should handle complex types', () => {
+      const persons = collect([{ id: 1 }, { id: 2 }])
+      const roles = collect([{ name: 'admin' }, { name: 'user' }])
+
+      const result = persons.cartesianProduct(roles)
+      expect(result.toArray()).toEqual([
+        [{ id: 1 }, { name: 'admin' }],
+        [{ id: 1 }, { name: 'user' }],
+        [{ id: 2 }, { name: 'admin' }],
+        [{ id: 2 }, { name: 'user' }],
+      ])
+    })
+  })
+
+  describe('power()', () => {
+    it('should compute power set', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.power()
+
+      const powerSetArrays = result.map(subset => subset.toArray()).toArray()
+      expect(powerSetArrays).toEqual([
+        [],
+        [1],
+        [2],
+        [1, 2],
+        [3],
+        [1, 3],
+        [2, 3],
+        [1, 2, 3],
+      ])
+    })
+
+    it('should include empty set', () => {
+      const collection = collect([1, 2])
+      const result = collection.power()
+
+      const firstSet = result.first()
+      expect(firstSet?.toArray()).toEqual([])
+    })
+
+    it('should handle empty collection', () => {
+      const collection = collect<number>([])
+      const result = collection.power()
+
+      expect(result.count()).toBe(1) // Only empty set
+      expect(result.first()?.toArray()).toEqual([])
+    })
+
+    it('should handle single-element collection', () => {
+      const collection = collect([1])
+      const result = collection.power()
+
+      const powerSetArrays = result.map(subset => subset.toArray()).toArray()
+      expect(powerSetArrays).toEqual([
+        [],
+        [1],
+      ])
+    })
+
+    it('should maintain correct size', () => {
+      const collection = collect([1, 2, 3, 4])
+      const result = collection.power()
+
+      // Power set size should be 2^n where n is the size of the original set
+      expect(result.count()).toBe(2 ** collection.count())
+    })
+
+    it('should work with complex types', () => {
+      const collection = collect([
+        { id: 1 },
+        { id: 2 },
+      ])
+
+      const result = collection.power()
+      const powerSetArrays = result.map(subset => subset.toArray()).toArray()
+
+      expect(powerSetArrays).toEqual([
+        [],
+        [{ id: 1 }],
+        [{ id: 2 }],
+        [{ id: 1 }, { id: 2 }],
+      ])
+    })
+
+    it('should preserve type safety', () => {
+      const collection = collect([1, 2, 3])
+      const result = collection.power()
+
+      const firstSet = result.first()
+      const firstNumber = firstSet?.first()
+      expect(firstNumber).toBeUndefined() // First set is empty
+    })
+
+    it('should generate all possible combinations', () => {
+      const collection = collect(['a', 'b'])
+      const result = collection.power()
+
+      // Convert to arrays for easier comparison
+      const combinations = result.map(subset => subset.toArray()).toArray()
+
+      // Check that all possible combinations are present
+      expect(combinations).toContainEqual([])
+      expect(combinations).toContainEqual(['a'])
+      expect(combinations).toContainEqual(['b'])
+      expect(combinations).toContainEqual(['a', 'b'])
+
+      // Check total number of combinations
+      expect(combinations.length).toBe(4) // 2^2 = 4
+    })
+  })
+})
 
 // describe('Advanced Math Operations', () => {
 //   describe('zscore()', () => {
