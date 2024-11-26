@@ -4986,57 +4986,225 @@ describe('Set Operations', () => {
   })
 })
 
-// describe('Advanced Math Operations', () => {
-//   describe('zscore()', () => {
-//     it('should calculate z-scores', () => expect(true).toBe(true))
-//     it('should handle key parameter', () => expect(true).toBe(true))
-//   })
+describe('Advanced Math Operations', () => {
+  describe('fft()', () => {
+    it('should compute FFT for number collections', () => {
+      // Simple sine wave
+      const samples = collect(Array.from({ length: 8 }, (_, i) =>
+        Math.sin(2 * Math.PI * i / 8)))
 
-//   describe('kurtosis()', () => {
-//     it('should calculate kurtosis', () => expect(true).toBe(true))
-//     it('should handle key parameter', () => expect(true).toBe(true))
-//   })
+      const result = samples.fft()
+      const magnitudes = result.map(([real, imag]) =>
+        Math.sqrt(real * real + imag * imag),
+      ).toArray()
 
-//   describe('skewness()', () => {
-//     it('should calculate skewness', () => expect(true).toBe(true))
-//     it('should handle key parameter', () => expect(true).toBe(true))
-//   })
+      // Should have peak at frequency 1
+      expect(magnitudes[1]).toBeGreaterThan(magnitudes[0])
+      expect(magnitudes[1]).toBeGreaterThan(magnitudes[2])
+    })
 
-//   describe('covariance()', () => {
-//     it('should calculate covariance', () => expect(true).toBe(true))
-//     it('should handle different keys', () => expect(true).toBe(true))
-//   })
+    it('should throw for non-number collections', () => {
+      const strings = collect(['a', 'b', 'c'])
+      expect(() => strings.fft()).toThrow()
 
-//   describe('entropy()', () => {
-//     it('should calculate entropy', () => expect(true).toBe(true))
-//     it('should handle key parameter', () => expect(true).toBe(true))
-//   })
+      const objects = collect([{}, {}, {}])
+      expect(() => objects.fft()).toThrow()
+    })
 
-//   describe('fft()', () => {
-//     it('should compute FFT for number collections', () => expect(true).toBe(true))
-//     it('should throw for non-number collections', () => expect(true).toBe(true))
-//   })
+    it('should handle power of 2 lengths', () => {
+      const samples = collect([1, 2, 3, 4])
+      expect(() => samples.fft()).not.toThrow()
 
-//   describe('interpolate()', () => {
-//     it('should interpolate values', () => expect(true).toBe(true))
-//     it('should handle different point counts', () => expect(true).toBe(true))
-//   })
+      const samples2 = collect([1, 2, 3])
+      expect(() => samples2.fft()).toThrow()
+    })
 
-//   describe('convolve()', () => {
-//     it('should convolve with kernel', () => expect(true).toBe(true))
-//     it('should handle different kernel sizes', () => expect(true).toBe(true))
-//   })
+    it('should preserve signal energy', () => {
+      const samples = collect([1, 2, 3, 4, 5, 6, 7, 8])
+      const fftResult = samples.fft()
 
-//   describe('differentiate()', () => {
-//     it('should compute derivative', () => expect(true).toBe(true))
-//     it('should handle numeric collections', () => expect(true).toBe(true))
-//   })
+      const inputEnergy = samples.reduce((sum, x) => sum + x * x, 0)
+      const outputEnergy = fftResult.reduce((sum, [real, imag]) =>
+        sum + real * real + imag * imag, 0) / samples.count()
 
-//   describe('integrate()', () => {
-//     it('should compute integral', () => expect(true).toBe(true))
-//     it('should handle numeric collections', () => expect(true).toBe(true))
-//   })
-// })
+      expect(outputEnergy).toBeCloseTo(inputEnergy)
+    })
+  })
+
+  describe('interpolate()', () => {
+    it('should interpolate values', () => {
+      const samples = collect([1, 3])
+      const result = samples.interpolate(3)
+      expect(result.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('should handle different point counts', () => {
+      const samples = collect([0, 10])
+
+      const result5 = samples.interpolate(5)
+      expect(result5.toArray()).toEqual([0, 2.5, 5, 7.5, 10])
+
+      const result3 = samples.interpolate(3)
+      expect(result3.toArray()).toEqual([0, 5, 10])
+    })
+
+    it('should preserve endpoints', () => {
+      const samples = collect([1, 5])
+      const result = samples.interpolate(5)
+      expect(result.first()).toBe(1)
+      expect(result.last()).toBe(5)
+    })
+
+    it('should handle single point', () => {
+      const samples = collect([5])
+      // Single point interpolation should just repeat the value
+      const result = samples.interpolate(3)
+      expect(result.toArray()).toEqual([5, 5, 5])
+    })
+  })
+
+  describe('convolve()', () => {
+    it('should convolve with kernel', () => {
+      const signal = collect([1, 0, 0, 0, 1])
+      const kernel = [0.5, 0.5]
+
+      const result = signal.convolve(kernel).toArray()
+      // For signal [1,0,0,0,1] and kernel [0.5,0.5], the result should be:
+      // [0.5, 0.5, 0, 0, 0.5, 0.5]
+      const expected = [0.5, 0.5, 0, 0, 0.5, 0.5].map(v => Number(v.toFixed(3)))
+      expect(result.map(v => Number(v.toFixed(3)))).toEqual(expected)
+    })
+
+    it('should handle different kernel sizes', () => {
+      const signal = collect([1, 2, 3, 4])
+
+      // Moving average with window 2
+      const kernel2 = [0.5, 0.5]
+      const result2 = signal.convolve(kernel2)
+      // For valid convolution, output length should be N + M - 1
+      // where N is signal length and M is kernel length
+      expect(result2.count()).toBe(signal.count() + kernel2.length - 1)
+
+      // Moving average with window 3
+      const kernel3 = [1 / 3, 1 / 3, 1 / 3]
+      const result3 = signal.convolve(kernel3)
+      expect(result3.count()).toBe(signal.count() + kernel3.length - 1)
+    })
+
+    it('should handle empty signal or kernel', () => {
+      const signal = collect([1, 2, 3])
+      const empty = collect<number>([])
+
+      // Should throw for empty kernel
+      expect(() => signal.convolve([])).toThrow('Kernel must not be empty')
+
+      // Should throw for empty signal
+      expect(() => empty.convolve([1, 2])).toThrow('Signal must not be empty')
+    })
+
+    it('should perform valid convolution', () => {
+      // Test with known convolution result
+      const signal = collect([1, 2, 1])
+      const kernel = [1, 1]
+
+      // Manual calculation for [1,2,1] * [1,1]:
+      // [1*1 = 1]
+      // [1*1 + 2*1 = 3]
+      // [2*1 + 1*1 = 3]
+      // [1*1 = 1]
+      const result = signal.convolve(kernel).toArray()
+      expect(result.map(v => Number(v.toFixed(3)))).toEqual([1, 3, 3, 1])
+    })
+  })
+
+  describe('differentiate()', () => {
+    it('should compute derivative', () => {
+      const samples = collect([1, 2, 4, 8])
+      const result = samples.differentiate().toArray()
+      expect(result).toEqual([1, 2, 4]) // Forward differences
+    })
+
+    it('should handle numeric collections', () => {
+      const samples = collect([0, 0, 0])
+      expect(samples.differentiate().toArray()).toEqual([0, 0])
+
+      const linear = collect([1, 2, 3, 4])
+      expect(linear.differentiate().toArray()).toEqual([1, 1, 1])
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect([])
+      expect(empty.differentiate().toArray()).toEqual([])
+    })
+
+    it('should handle single value', () => {
+      const single = collect([5])
+      expect(single.differentiate().toArray()).toEqual([])
+    })
+  })
+
+  describe('integrate()', () => {
+    it('should compute integral', () => {
+      const samples = collect([1, 1, 1])
+      const result = samples.integrate().toArray()
+      expect(result).toEqual([0, 1, 2, 3]) // Cumulative sum with initial 0
+    })
+
+    it('should handle numeric collections', () => {
+      const zeros = collect([0, 0, 0])
+      expect(zeros.integrate().toArray()).toEqual([0, 0, 0, 0])
+
+      const constant = collect([2, 2, 2])
+      expect(constant.integrate().toArray()).toEqual([0, 2, 4, 6])
+    })
+
+    it('should handle empty collection', () => {
+      const empty = collect<number>([])
+      expect(empty.integrate().toArray()).toEqual([0])
+    })
+
+    it('should handle single value', () => {
+      const single = collect([5])
+      expect(single.integrate().toArray()).toEqual([0, 5])
+    })
+
+    it('should preserve area under curve', () => {
+      const samples = collect([1, 2, 3])
+      const integral = samples.integrate().toArray()
+
+      // Manual calculation of area under curve
+      const manualArea = samples.reduce((sum, value) => sum + value, 0)
+      // Last value of integral should equal area under curve
+      expect(integral[integral.length - 1]).toBe(manualArea)
+    })
+
+    it('should handle negative values', () => {
+      const samples = collect([-1, -2, -3])
+      const result = samples.integrate().toArray()
+      expect(result).toEqual([0, -1, -3, -6])
+    })
+
+    it('should handle alternating values', () => {
+      const samples = collect([1, -1, 1, -1])
+      const result = samples.integrate().toArray()
+      expect(result).toEqual([0, 1, 0, 1, 0])
+    })
+
+    it('should be inverse of differentiate', () => {
+      const original = collect([1, 2, 3, 4])
+      const derived = original.differentiate()
+      const restored = derived.integrate().toArray().slice(1) // Remove initial 0
+
+      // Should approximately recover original values
+      original.toArray().forEach((value, index) => {
+        // Handle floating point precision
+        const restoredValue = restored[index] || 0
+        expect(typeof restoredValue).toBe('number')
+        expect(restoredValue).toBeCloseTo(value, 5)
+      })
+    })
+  })
+})
 
 // describe('Text Analysis', () => {
 //   describe('sentiment()', () => {

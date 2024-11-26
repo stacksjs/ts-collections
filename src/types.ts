@@ -383,7 +383,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   slug: (this: CollectionOperations<string>) => CollectionOperations<string>
 
   // Set Operations
-  symmetricDiff: <U>(other: T[] | CollectionOperations<T> | U[] | CollectionOperations<U>) => CollectionOperations<T | U>
+  symmetricDiff: <U>(other: T[] | CollectionOperations<T>) => CollectionOperations<T>
   cartesianProduct: <U>(other: U[] | CollectionOperations<U>) => CollectionOperations<[T, U]>
   power: () => CollectionOperations<CollectionOperations<T>>
 
@@ -455,11 +455,30 @@ export interface CollectionOperations<T> extends Collection<T> {
   lazy: () => LazyCollectionOperations<T>
 
   // Advanced Math & Statistics
-  zscore: <K extends keyof T>(key: K) => CollectionOperations<number>
-  kurtosis: <K extends keyof T>(key: K) => number
-  skewness: <K extends keyof T>(key: K) => number
-  covariance: <K extends keyof T>(key1: K, key2: K) => number
-  entropy: <K extends keyof T>(key: K) => number
+  zscore: {
+    (this: CollectionOperations<number>): CollectionOperations<number>
+    <K extends keyof T>(key: K): CollectionOperations<number>
+  }
+
+  kurtosis: {
+    (this: CollectionOperations<number>): number
+    <K extends keyof T>(key: K): number
+  }
+
+  skewness: {
+    (this: CollectionOperations<number>): number
+    <K extends keyof T>(key: K): number
+  }
+
+  entropy: {
+    (this: CollectionOperations<number>): number
+    <K extends keyof T>(key: K): number
+  }
+
+  covariance: <K extends keyof T>(
+    key1: K,
+    key2: K
+  ) => number
 
   // Pattern Matching & Text Analysis
   fuzzyMatch: <K extends keyof T>(key: K, pattern: string, threshold?: number) => CollectionOperations<T>
@@ -579,17 +598,10 @@ export interface CollectionOperations<T> extends Collection<T> {
    * Only available when T is number
    */
   fft: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<[number, number]> : never
-  interpolate: (
-    this: CollectionOperations<T>,
-    points: number
-  ) => T extends number ? CollectionOperations<number> : never
-  /**
-   * Compute convolution with a kernel
-   * Only available when T is number
-   */
-  convolve: (this: CollectionOperations<T>, kernel: number[]) => T extends number ? CollectionOperations<number> : never
-  differentiate: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<number> : never
-  integrate: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<number> : never
+  interpolate: (this: CollectionOperations<number>, points: number) => CollectionOperations<number>
+  convolve: (this: CollectionOperations<number>, kernel: number[]) => CollectionOperations<number>
+  differentiate: (this: CollectionOperations<number>) => CollectionOperations<number>
+  integrate: (this: CollectionOperations<number>) => CollectionOperations<number>
 
   // Specialized Data Types Support
   geoDistance: <K extends keyof T>(

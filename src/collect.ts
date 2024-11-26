@@ -1307,26 +1307,25 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     symmetricDiff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
       const otherItems = Array.isArray(other) ? other : other.items
-      const thisSet = new Set(this.items)
       const otherSet = new Set(otherItems)
+      const thisSet = new Set(collection.items)
+      const result = new Set<T>()
 
-      const result: T[] = []
-
-      // Add items that are in this but not in other
-      for (const item of thisSet) {
+      // Add items that are in this collection but not in other
+      collection.items.forEach((item) => {
         if (!otherSet.has(item)) {
-          result.push(item)
+          result.add(item)
         }
-      }
+      })
 
-      // Add items that are in other but not in this
-      for (const item of otherSet) {
+      // Add items that are in other but not in this collection
+      otherItems.forEach((item) => {
         if (!thisSet.has(item)) {
-          result.push(item)
+          result.add(item)
         }
-      }
+      })
 
-      return collect(result)
+      return collect([...result])
     },
 
     cartesianProduct<U>(other: U[] | CollectionOperations<U>): CollectionOperations<[T, U]> {
@@ -2187,23 +2186,52 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     // Advanced statistical operations
-    zscore<K extends keyof T>(key: K): CollectionOperations<number> {
+    zscore<K extends keyof T>(key?: K): CollectionOperations<number> {
+      if (key === undefined) {
+        // Handle case where T is number and we're working directly with the values
+        const values = this.items as number[]
+        const mean = values.reduce((a, b) => a + b, 0) / values.length
+        const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
+        return collect(values.map(value => (value - mean) / std))
+      }
+
+      // Handle case where we're working with a key from an object
       const values = collection.items.map(item => Number(item[key]))
       const mean = values.reduce((a, b) => a + b, 0) / values.length
       const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
       return collect(values.map(value => (value - mean) / std))
     },
 
-    kurtosis<K extends keyof T>(key: K): number {
-      const values = collection.items.map(item => Number(item[key]))
+    kurtosis<K extends keyof T>(key?: K): number {
+      let values: number[]
+
+      if (key === undefined) {
+        // Handle case where T is number
+        values = this.items as number[]
+      }
+      else {
+        // Handle case where we're working with a key from an object
+        values = collection.items.map(item => Number(item[key]))
+      }
+
       const mean = values.reduce((a, b) => a + b, 0) / values.length
       const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
       const m4 = values.reduce((a, b) => a + (b - mean) ** 4, 0) / values.length
       return m4 / (std ** 4) - 3
     },
 
-    skewness<K extends keyof T>(key: K): number {
-      const values = collection.items.map(item => Number(item[key]))
+    skewness<K extends keyof T>(key?: K): number {
+      let values: number[]
+
+      if (key === undefined) {
+        // Handle case where T is number
+        values = this.items as number[]
+      }
+      else {
+        // Handle case where we're working with a key from an object
+        values = collection.items.map(item => Number(item[key]))
+      }
+
       const mean = values.reduce((a, b) => a + b, 0) / values.length
       const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
       const m3 = values.reduce((a, b) => a + (b - mean) ** 3, 0) / values.length
@@ -2218,12 +2246,23 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return values1.reduce((a, _, i) => a + (values1[i] - mean1) * (values2[i] - mean2), 0) / values1.length
     },
 
-    entropy<K extends keyof T>(key: K): number {
-      const values = collection.items.map(item => item[key])
-      const frequencies = new Map<T[K], number>()
+    entropy<K extends keyof T>(key?: K): number {
+      let values: any[]
+
+      if (key === undefined) {
+        // Handle case where T is number
+        values = this.items as number[]
+      }
+      else {
+        // Handle case where we're working with a key from an object
+        values = collection.items.map(item => item[key])
+      }
+
+      const frequencies = new Map<any, number>()
       for (const value of values) {
         frequencies.set(value, (frequencies.get(value) || 0) + 1)
       }
+
       return -Array.from(frequencies.values())
         .map(freq => freq / values.length)
         .reduce((a, p) => a + p * Math.log2(p), 0)
@@ -2470,9 +2509,7 @@ ${collection.items.map(item =>
     },
 
     // Advanced mathematical operations
-    fft(
-      this: CollectionOperations<T>,
-    ): T extends number ? CollectionOperations<[number, number]> : never {
+    fft(this: CollectionOperations<T>): T extends number ? CollectionOperations<[number, number]> : never {
       if (!collection.items.every(item => typeof item === 'number')) {
         throw new Error('FFT can only be performed on number collections')
       }
@@ -2510,15 +2547,18 @@ ${collection.items.map(item =>
       ) as T extends number ? CollectionOperations<[number, number]> : never
     },
 
-    interpolate(
-      this: CollectionOperations<T>,
-      points: number,
-    ): T extends number ? CollectionOperations<number> : never {
-      if (!collection.items.every(item => typeof item === 'number')) {
-        throw new Error('Interpolation can only be performed on number collections')
+    interpolate(this: CollectionOperations<number>, points: number): CollectionOperations<number> {
+      if (points < 2)
+        throw new Error('Points must be greater than 1')
+
+      if (this.count() === 1) {
+        // Single point case - repeat the value
+        const value = Number(this.first())
+        // eslint-disable-next-line unicorn/no-new-array
+        return collect(new Array(points).fill(value))
       }
 
-      const input = collection.items as number[]
+      const input = this.toArray() // No type assertion needed due to this: CollectionOperations<number>
       const result: number[] = []
       const step = (input.length - 1) / (points - 1)
 
@@ -2531,70 +2571,65 @@ ${collection.items.map(item =>
         result.push(y0 + (y1 - y0) * (x - x0))
       }
 
-      return collect(result) as T extends number ? CollectionOperations<number> : never
+      return collect(result)
     },
 
-    convolve(
-      this: CollectionOperations<T>,
-      kernel: number[],
-    ): T extends number ? CollectionOperations<number> : never {
-      if (!collection.items.every(item => typeof item === 'number')) {
-        throw new Error('Convolution can only be performed on number collections')
-      }
+    convolve(this: CollectionOperations<number>, kernel: number[]): CollectionOperations<number> {
+      if (kernel.length === 0)
+        throw new Error('Kernel must not be empty')
+      if (this.count() === 0)
+        throw new Error('Signal must not be empty')
 
-      const signal = collection.items as number[]
+      const signal = this.toArray()
+      const n = signal.length
+      const m = kernel.length
       const result: number[] = []
-      const kernelCenter = Math.floor(kernel.length / 2)
 
-      for (let i = 0; i < signal.length; i++) {
+      // Output length will be n + m - 1
+      for (let i = 0; i < n + m - 1; i++) {
         let sum = 0
-        for (let j = 0; j < kernel.length; j++) {
-          const signalIdx = i - kernelCenter + j
-          if (signalIdx >= 0 && signalIdx < signal.length) {
-            sum += signal[signalIdx] * kernel[j]
-          }
+        for (let j = Math.max(0, i - m + 1); j <= Math.min(n - 1, i); j++) {
+          sum += signal[j] * kernel[i - j]
         }
         result.push(sum)
       }
 
-      return collect(result) as T extends number ? CollectionOperations<number> : never
+      return collect(result)
     },
 
-    differentiate(
-      this: CollectionOperations<T>,
-    ): T extends number ? CollectionOperations<number> : never {
-      if (!collection.items.every(item => typeof item === 'number')) {
-        throw new Error('Differentiation can only be performed on number collections')
-      }
+    differentiate(this: CollectionOperations<number>): CollectionOperations<number> {
+      if (this.count() <= 1)
+        return collect([] as number[])
 
-      const items = collection.items as number[]
+      const values = this.toArray()
       return collect(
-        items.slice(1).map((v, i) => v - items[i]),
-      ) as T extends number ? CollectionOperations<number> : never
+        values.slice(1).map((v, i) => v - values[i]),
+      )
     },
 
-    integrate(
-      this: CollectionOperations<T>,
-    ): T extends number ? CollectionOperations<number> : never {
-      if (!collection.items.every(item => typeof item === 'number')) {
-        throw new Error('Integration can only be performed on number collections')
+    integrate(this: CollectionOperations<number>): CollectionOperations<number> {
+      const values = this.toArray()
+      if (values.length === 0) {
+        return collect([0] as number[])
       }
 
-      const items = collection.items as number[]
+      // For the inverse of differentiation, we need to reconstruct
+      // the original sequence from the differences
       const result: number[] = [0]
-      for (let i = 0; i < items.length; i++) {
-        result.push(result[i] + items[i])
+      let sum = values[0]  // Start with the first value
+      result.push(sum)
+
+      // Each subsequent value is the previous value plus the difference
+      for (let i = 1; i < values.length; i++) {
+        sum += values[i]
+        result.push(sum)
       }
 
-      return collect(result) as T extends number ? CollectionOperations<number> : never
+      return collect(result)
     },
 
     // Specialized data types support
-    geoDistance<K extends keyof T>(
-      key: K,
-      point: [number, number],
-      unit: 'km' | 'mi' = 'km',
-    ): CollectionOperations<T & { distance: number }> {
+    geoDistance<K extends keyof T>(key: K, point: [number, number], unit: 'km' | 'mi' = 'km'): CollectionOperations<T & { distance: number }> {
       function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
         const R = unit === 'km' ? 6371 : 3959 // Earth's radius in km or miles
         const dLat = (lat2 - lat1) * Math.PI / 180
