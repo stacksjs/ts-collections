@@ -6115,7 +6115,7 @@ describe('Export Operations', () => {
         metadata: { version: '1.0' },
         tags: ['a', 'b', 'c'],
         timestamp: new Date('2024-01-01'),
-        nested: { obj: { value: 42 } }
+        nested: { obj: { value: 42 } },
       }]
       const collection = collect(data)
       const pandas = collection.toPandas()
@@ -6126,29 +6126,157 @@ describe('Export Operations', () => {
       // Create expected object with string date to match JSON serialization
       const expected = {
         ...data[0],
-        timestamp: data[0].timestamp.toISOString()
+        timestamp: data[0].timestamp.toISOString(),
       }
       expect(result[0]).toEqual(expected)
     })
   })
 })
 
-// describe('Streaming Operations', () => {
-//   describe('stream()', () => {
-//     it('should create readable stream', () => expect(true).toBe(true))
-//     it('should handle backpressure', () => expect(true).toBe(true))
-//   })
+describe('Streaming Operations', () => {
+  describe('stream()', () => {
+    it('should create readable stream', async () => {
+      const data = [1, 2, 3, 4, 5]
+      const collection = collect(data)
+      const stream = collection.stream()
 
-//   describe('fromStream()', () => {
-//     it('should collect from stream', () => expect(true).toBe(true))
-//     it('should handle stream errors', () => expect(true).toBe(true))
-//   })
+      const chunks: number[] = []
+      const reader = stream.getReader()
 
-//   describe('batch()', () => {
-//     it('should process in batches', () => expect(true).toBe(true))
-//     it('should handle custom batch sizes', () => expect(true).toBe(true))
-//   })
-// })
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done)
+          break
+        chunks.push(value)
+      }
+
+      expect(chunks).toEqual(data)
+    })
+
+    it('should handle backpressure', async () => {
+      // Reduced data size and using a more reasonable delay
+      const data = Array.from({ length: 100 }, (_, i) => i)
+      const collection = collect(data)
+      const stream = collection.stream()
+
+      const chunks: number[] = []
+      const reader = stream.getReader()
+
+      const start = performance.now()
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done)
+            break
+          chunks.push(value)
+          // Small delay that won't cause timeout
+          if (chunks.length % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1))
+          }
+        }
+      }
+      finally {
+        reader.releaseLock()
+      }
+
+      const duration = performance.now() - start
+
+      expect(chunks).toEqual(data)
+      // Should take some measurable time but not too long
+      expect(duration).toBeGreaterThan(5) // At least 5ms
+      expect(duration).toBeLessThan(1000) // Less than 1 second
+    })
+  })
+
+  describe('fromStream()', () => {
+    it('should collect from stream', async () => {
+      const data = [1, 2, 3, 4, 5]
+      const stream = new ReadableStream({
+        start(controller) {
+          data.forEach(item => controller.enqueue(item))
+          controller.close()
+        },
+      })
+
+      const result = await collect([]).fromStream(stream)
+      expect(result.toArray()).toEqual(data)
+    })
+
+    it('should handle stream errors', async () => {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.error(new Error('Stream error'))
+        },
+      })
+
+      expect(collect([]).fromStream(errorStream))
+        .rejects
+        .toThrow('Stream error')
+    })
+  })
+
+  describe('batch()', () => {
+    it('should process in batches', async () => {
+      const data = Array.from({ length: 10 }, (_, i) => i)
+      const collection = collect(data)
+      const batches: number[][] = []
+
+      // Default batch size is 1000
+      for await (const batch of collection.batch(3)) {
+        batches.push(batch.toArray())
+      }
+
+      expect(batches).toHaveLength(4) // 10 items in batches of 3 = 4 batches
+      expect(batches[0]).toHaveLength(3)
+      expect(batches[1]).toHaveLength(3)
+      expect(batches[2]).toHaveLength(3)
+      expect(batches[3]).toHaveLength(1) // Last batch has remainder
+      expect(batches.flat()).toEqual(data)
+    })
+
+    it('should handle custom batch sizes', async () => {
+      const data = Array.from({ length: 100 }, (_, i) => i)
+      const collection = collect(data)
+      const batches: number[][] = []
+
+      for await (const batch of collection.batch(25)) {
+        batches.push(batch.toArray())
+      }
+
+      expect(batches).toHaveLength(4) // 100 items in batches of 25 = 4 batches
+      batches.forEach((batch, index) => {
+        if (index < batches.length - 1) {
+          expect(batch).toHaveLength(25)
+        }
+      })
+      expect(batches.flat()).toEqual(data)
+    })
+
+    it('should handle empty collections', async () => {
+      const collection = collect([])
+      const batches: any[] = []
+
+      for await (const batch of collection.batch(10)) {
+        batches.push(batch.toArray())
+      }
+
+      expect(batches).toHaveLength(0)
+    })
+
+    it('should handle single-item collections', async () => {
+      const collection = collect([1])
+      const batches: number[][] = []
+
+      for await (const batch of collection.batch(10)) {
+        batches.push(batch.toArray())
+      }
+
+      expect(batches).toHaveLength(1)
+      expect(batches[0]).toEqual([1])
+    })
+  })
+})
 
 // describe('Performance Monitoring', () => {
 //   describe('metrics()', () => {
