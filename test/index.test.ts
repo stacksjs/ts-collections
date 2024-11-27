@@ -5206,68 +5206,114 @@ describe('Advanced Math Operations', () => {
   })
 })
 
-// describe('Text Analysis', () => {
-//   describe('sentiment()', () => {
-//     it('should analyze sentiment', () => expect(true).toBe(true))
-//     it('should calculate comparative score', () => expect(true).toBe(true))
-//   })
+describe('Text Analysis', () => {
+  describe('sentiment()', () => {
+    it('should analyze sentiment', () => {
+      const texts = collect([
+        'I love this product, it is great and awesome!', // positive words: love, great, awesome
+        'This is terrible.', // negative word: terrible
+        'The weather is nice today.', // neutral
+      ])
 
-//   describe('wordFrequency()', () => {
-//     it('should count word occurrences', () => expect(true).toBe(true))
-//     it('should handle case sensitivity', () => expect(true).toBe(true))
-//   })
+      const sentiments = texts.sentiment().toArray()
 
-//   describe('ngrams()', () => {
-//     it('should generate n-grams', () => expect(true).toBe(true))
-//     it('should handle different n values', () => expect(true).toBe(true))
-//   })
-// })
+      expect(sentiments[0].score).toBe(2) // love + great/awesome
+      expect(sentiments[1].score).toBe(-1) // terrible
+      expect(sentiments[2].score).toBe(0) // neutral
+    })
 
-// describe('Data Quality Operations', () => {
-//   describe('detectAnomalies()', () => {
-//     it('should detect using z-score method', () => expect(true).toBe(true))
-//     it('should detect using IQR method', () => expect(true).toBe(true))
-//     it('should detect using isolation forest', () => expect(true).toBe(true))
-//   })
+    it('should calculate comparative score', () => {
+      const texts = collect([
+        'good good good bad', // 3 positive, 1 negative = score 2, 4 words
+        'terrible awful', // 2 negative = score -2, 2 words
+      ])
 
-//   describe('impute()', () => {
-//     it('should impute using mean', () => expect(true).toBe(true))
-//     it('should impute using median', () => expect(true).toBe(true))
-//     it('should impute using mode', () => expect(true).toBe(true))
-//   })
+      const sentiments = texts.sentiment().toArray()
 
-//   describe('normalize()', () => {
-//     it('should normalize using min-max', () => expect(true).toBe(true))
-//     it('should normalize using z-score', () => expect(true).toBe(true))
-//   })
+      expect(sentiments[0].comparative).toBe(0.5) // 2/4
+      expect(sentiments[1].comparative).toBe(-1) // -2/2
+    })
 
-//   describe('removeOutliers()', () => {
-//     it('should remove statistical outliers', () => expect(true).toBe(true))
-//     it('should handle custom threshold', () => expect(true).toBe(true))
-//   })
-// })
+    it('should calculate comparative score', () => {
+      const texts = collect([
+        'good good good bad', // 3 positive, 1 negative = score 2, 4 words
+        'terrible awful', // 2 negative = score -2, 2 words
+      ])
 
-// describe('Type Operations', () => {
-//   describe('as()', () => {
-//     it('should cast to new type', () => expect(true).toBe(true))
-//     it('should handle type constraints', () => expect(true).toBe(true))
-//   })
+      const sentiments = texts.sentiment().toArray()
 
-//   describe('pick()', () => {
-//     it('should pick specified keys', () => expect(true).toBe(true))
-//     it('should handle missing keys', () => expect(true).toBe(true))
-//   })
+      expect(sentiments[0].comparative).toBe(0.5) // 2/4
+      expect(sentiments[1].comparative).toBe(-1) // -2/2
+    })
+  })
 
-//   describe('omit()', () => {
-//     it('should omit specified keys', () => expect(true).toBe(true))
-//     it('should handle missing keys', () => expect(true).toBe(true))
-//   })
+  describe('wordFrequency()', () => {
+    it('should count word occurrences', () => {
+      const texts = collect([
+        'hello world hello',
+        'world test hello test',
+      ])
 
-//   describe('transform()', () => {
-//     it('should transform using schema', () => expect(true).toBe(true))
-//     it('should handle complex transformations', () => expect(true).toBe(true))
-//   })
-// })
+      const frequency = texts.wordFrequency()
+
+      expect(frequency.get('hello')).toBe(3)
+      expect(frequency.get('world')).toBe(2)
+      expect(frequency.get('test')).toBe(2)
+    })
+
+    it('should handle case sensitivity', () => {
+      const texts = collect([
+        'Hello HELLO hello',
+        'World WORLD world',
+      ])
+
+      const frequency = texts.wordFrequency()
+
+      expect(frequency.get('hello')).toBe(3)
+      expect(frequency.get('world')).toBe(3)
+      expect(frequency.get('HELLO')).toBeUndefined()
+      expect(frequency.get('WORLD')).toBeUndefined()
+    })
+  })
+
+  describe('ngrams()', () => {
+    it('should generate n-grams', () => {
+      const texts = collect([
+        'the quick brown fox',
+        'quick brown fox jumps',
+      ])
+
+      const bigrams = texts.ngrams(2).toArray()
+      const trigrams = texts.ngrams(3).toArray()
+
+      expect(bigrams).toContain('the quick')
+      expect(bigrams).toContain('quick brown')
+      expect(bigrams).toContain('brown fox')
+      expect(bigrams).toContain('fox jumps')
+
+      expect(trigrams).toContain('the quick brown')
+      expect(trigrams).toContain('quick brown fox')
+      expect(trigrams).toContain('brown fox jumps')
+    })
+
+    it('should handle different n values', () => {
+      const texts = collect(['the quick brown fox jumps'])
+
+      expect(texts.ngrams(1).toArray()).toHaveLength(5) // individual words
+      expect(texts.ngrams(2).toArray()).toHaveLength(4) // pairs
+      expect(texts.ngrams(3).toArray()).toHaveLength(3) // triplets
+      expect(texts.ngrams(4).toArray()).toHaveLength(2) // quadruplets
+      expect(texts.ngrams(5).toArray()).toHaveLength(1) // full phrase
+      expect(texts.ngrams(6).toArray()).toHaveLength(0) // n > words
+    })
+
+    it('should handle empty input', () => {
+      const texts = collect([''])
+      expect(texts.ngrams(1).toArray()).toHaveLength(1) // Empty string is one "word"
+      expect(texts.ngrams(2).toArray()).toHaveLength(0) // Can't make bigrams from one word
+    })
+  })
+})
 
 // describe('Specialized Data Types', () => {
 //   describe('geoDistance()', () => {
