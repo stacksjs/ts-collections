@@ -5818,6 +5818,140 @@ describe('Specialized Data Types', () => {
   })
 })
 
+describe('Database-like Operations', () => {
+  describe('query()', () => {
+    const users = [
+      { id: 1, name: 'John', age: 30, active: true },
+      { id: 2, name: 'Jane', age: 25, active: true },
+      { id: 3, name: 'Bob', age: 35, active: false },
+    ]
+
+    it('should handle SQL-like queries', () => {
+      const collection = collect(users)
+      // Using item.property syntax since that's available in the filter context
+      const result = collection.query('where item.age > 25 && item.active === true')
+
+      expect(result.count()).toBe(1)
+      expect(result.first()?.name).toBe('John')
+    })
+
+    it('should support parameterized queries', () => {
+      const collection = collect(users)
+      // Using item.property syntax and correct parameter replacement
+      const result = collection.query('where item.age > ? && item.active === ?', [25, true])
+
+      expect(result.count()).toBe(1)
+      expect(result.first()?.name).toBe('John')
+    })
+  })
+
+  describe('having()', () => {
+    const sales = [
+      { category: 'A', amount: 100 },
+      { category: 'A', amount: 200 },
+      { category: 'B', amount: 50 },
+      { category: 'B', amount: 150 },
+    ]
+
+    it('should filter grouped results', () => {
+      const collection = collect(sales)
+      const result = collection.having('amount', '>', 100)
+
+      expect(result.count()).toBe(2)
+      expect(result.pluck('amount').toArray()).toEqual([200, 150])
+    })
+
+    it('should support different operators', () => {
+      const collection = collect(sales)
+
+      const greaterThan = collection.having('amount', '>', 100)
+      expect(greaterThan.count()).toBe(2)
+
+      const equalTo = collection.having('amount', '=', 100)
+      expect(equalTo.count()).toBe(1)
+
+      const lessThan = collection.having('amount', '<', 100)
+      expect(lessThan.count()).toBe(1)
+    })
+  })
+
+  describe('crossJoin()', () => {
+    const products = [
+      { id: 1, name: 'Product A' },
+      { id: 2, name: 'Product B' },
+    ]
+
+    const categories = [
+      { id: 1, name: 'Category X' },
+      { id: 2, name: 'Category Y' },
+    ]
+
+    it('should perform cross join', () => {
+      const collection = collect(products)
+      const result = collection.crossJoin(collect(categories))
+
+      expect(result.count()).toBe(4)
+      expect(result.first()).toEqual(expect.objectContaining({
+        id: 1,
+        name: 'Product A',
+        id: 1,
+        name: 'Category X',
+      }))
+    })
+
+    it('should handle empty collections', () => {
+      const collection = collect(products)
+      const emptyResult = collection.crossJoin(collect([]))
+
+      expect(emptyResult.count()).toBe(0)
+
+      const emptySource = collect([])
+      const resultWithEmpty = emptySource.crossJoin(collect(categories))
+
+      expect(resultWithEmpty.count()).toBe(0)
+    })
+  })
+
+  describe('leftJoin()', () => {
+    const orders = [
+      { id: 1, userId: 1, total: 100 },
+      { id: 2, userId: 2, total: 200 },
+      { id: 3, userId: 3, total: 300 },
+    ]
+
+    const users = [
+      { id: 1, name: 'John' },
+      { id: 2, name: 'Jane' },
+    ]
+
+    it('should perform left join', () => {
+      const collection = collect(orders)
+      const result = collection.leftJoin(collect(users), 'userId', 'id')
+
+      expect(result.count()).toBe(3)
+      expect(result.first()).toEqual(expect.objectContaining({
+        id: 1,
+        userId: 1,
+        total: 100,
+        name: 'John',
+      }))
+    })
+
+    it('should handle missing matches', () => {
+      const collection = collect(orders)
+      const result = collection.leftJoin(collect(users), 'userId', 'id')
+      const unmatched = result.last()
+
+      expect(unmatched).toEqual(expect.objectContaining({
+        id: 3,
+        userId: 3,
+        total: 300,
+      }))
+      expect(unmatched?.name).toBeUndefined()
+    })
+  })
+})
+
 // describe('Export Operations', () => {
 //   describe('toSQL()', () => {
 //     it('should generate SQL insert statement', () => expect(true).toBe(true))
