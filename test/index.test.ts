@@ -6120,6 +6120,7 @@ describe('Export Operations', () => {
       const collection = collect(data)
       const pandas = collection.toPandas()
 
+      // eslint-disable-next-line no-eval
       const result = eval(pandas.replace('pd.DataFrame', 'Array.from'))
       expect(result).toHaveLength(1)
 

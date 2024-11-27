@@ -2616,7 +2616,7 @@ ${collection.items.map(item =>
       // For the inverse of differentiation, we need to reconstruct
       // the original sequence from the differences
       const result: number[] = [0]
-      let sum = values[0]  // Start with the first value
+      let sum = values[0] // Start with the first value
       result.push(sum)
 
       // Each subsequent value is the previous value plus the difference
