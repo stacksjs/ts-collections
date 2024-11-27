@@ -5563,7 +5563,7 @@ describe('Type Operations', () => {
   describe('pick()', () => {
     const data = [
       { id: 1, name: 'John', age: 30, email: 'john@example.com' },
-      { id: 2, name: 'Jane', age: 25, email: 'jane@example.com' }
+      { id: 2, name: 'Jane', age: 25, email: 'jane@example.com' },
     ]
 
     it('should pick specified keys', () => {
@@ -5572,7 +5572,7 @@ describe('Type Operations', () => {
 
       expect(result.first()).toEqual({
         name: 'John',
-        email: 'john@example.com'
+        email: 'john@example.com',
       })
       expect(Object.keys(result.first() as object)).toHaveLength(2)
       expect(Object.keys(result.first() as object)).toEqual(['name', 'email'])
@@ -5585,7 +5585,7 @@ describe('Type Operations', () => {
 
       expect(result.first()).toEqual({
         name: 'John',
-        nonexistent: undefined
+        nonexistent: undefined,
       })
       expect(Object.keys(result.first() as object)).toHaveLength(2) // Updated to expect 2 keys
       // Verify the exact keys returned
@@ -5712,44 +5712,111 @@ describe('Type Operations', () => {
   })
 })
 
-// describe('Specialized Data Types', () => {
-//   describe('geoDistance()', () => {
-//     it('should calculate distances in km', () => expect(true).toBe(true))
-//     it('should calculate distances in miles', () => expect(true).toBe(true))
-//   })
+describe('Specialized Data Types', () => {
+  describe('geoDistance()', () => {
+    const locations = [
+      { name: 'New York', coords: [40.7128, -74.0060] },
+      { name: 'Los Angeles', coords: [34.0522, -118.2437] },
+      { name: 'Chicago', coords: [41.8781, -87.6298] },
+    ]
 
-//   describe('money()', () => {
-//     it('should format as currency', () => expect(true).toBe(true))
-//     it('should handle different currencies', () => expect(true).toBe(true))
-//   })
+    it('should calculate distances in km', () => {
+      const collection = collect(locations)
+      const point = [40.7128, -74.0060] // New York coordinates
+      const result = collection.geoDistance('coords', point, 'km')
 
-//   describe('dateTime()', () => {
-//     it('should format dates', () => expect(true).toBe(true))
-//     it('should handle different locales', () => expect(true).toBe(true))
-//   })
-// })
+      const distances = result.pluck('distance').toArray()
 
-// describe('Database-like Operations', () => {
-//   describe('query()', () => {
-//     it('should handle SQL-like queries', () => expect(true).toBe(true))
-//     it('should support parameterized queries', () => expect(true).toBe(true))
-//   })
+      // Distance from NY to NY should be 0
+      expect(distances[0]).toBeCloseTo(0, 0)
 
-//   describe('having()', () => {
-//     it('should filter grouped results', () => expect(true).toBe(true))
-//     it('should support different operators', () => expect(true).toBe(true))
-//   })
+      // Distance from NY to LA should be around 3935 km
+      expect(distances[1]).toBeCloseTo(3935, -2)
 
-//   describe('crossJoin()', () => {
-//     it('should perform cross join', () => expect(true).toBe(true))
-//     it('should handle empty collections', () => expect(true).toBe(true))
-//   })
+      // Distance from NY to Chicago should be around 1190 km
+      expect(distances[2]).toBeCloseTo(1190, -2)
+    })
 
-//   describe('leftJoin()', () => {
-//     it('should perform left join', () => expect(true).toBe(true))
-//     it('should handle missing matches', () => expect(true).toBe(true))
-//   })
-// })
+    it('should calculate distances in miles', () => {
+      const collection = collect(locations)
+      const point = [40.7128, -74.0060] // New York coordinates
+      const result = collection.geoDistance('coords', point, 'mi')
+
+      const distances = result.pluck('distance').toArray()
+
+      // Distance from NY to NY should be 0
+      expect(distances[0]).toBeCloseTo(0, 0)
+
+      // Distance from NY to LA should be around 2445 miles
+      expect(distances[1]).toBeCloseTo(2445, -2)
+
+      // Distance from NY to Chicago should be around 739 miles
+      expect(distances[2]).toBeCloseTo(739, -2)
+    })
+  })
+
+  describe('money()', () => {
+    const transactions = [
+      { amount: 1234.56, type: 'income' },
+      { amount: 9876.54, type: 'expense' },
+      { amount: 0.99, type: 'income' },
+    ]
+
+    it('should format as currency', () => {
+      const collection = collect(transactions)
+      const result = collection.money('amount')
+
+      const formatted = result.pluck('formatted').toArray()
+      expect(formatted[0]).toBe('$1,234.56')
+      expect(formatted[1]).toBe('$9,876.54')
+      expect(formatted[2]).toBe('$0.99')
+    })
+
+    it('should handle different currencies', () => {
+      const collection = collect(transactions)
+      const eurResult = collection.money('amount', 'EUR')
+      const gbpResult = collection.money('amount', 'GBP')
+      const jpyResult = collection.money('amount', 'JPY')
+
+      expect(eurResult.first()?.formatted).toMatch(/^€/)
+      expect(gbpResult.first()?.formatted).toMatch(/^£/)
+      expect(jpyResult.first()?.formatted).not.toContain('.') // JPY doesn't use decimals
+    })
+  })
+
+  describe('dateTime()', () => {
+    const events = [
+      { date: '2024-01-01T12:00:00Z', name: 'New Year' },
+      { date: '2024-07-04T16:30:00Z', name: 'Independence Day' },
+      { date: '2024-12-25T00:00:00Z', name: 'Christmas' },
+    ]
+
+    it('should format dates', () => {
+      const collection = collect(events)
+      const result = collection.dateTime('date')
+
+      const formatted = result.pluck('formatted').toArray()
+      expect(formatted[0]).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
+      expect(formatted[0]).toContain('2024')
+    })
+
+    it('should handle different locales', () => {
+      const collection = collect(events)
+      const deResult = collection.dateTime('date', 'de-DE')
+      const frResult = collection.dateTime('date', 'fr-FR')
+      const jaResult = collection.dateTime('date', 'ja-JP')
+
+      // German format - matches actual implementation output
+      expect(deResult.first()?.formatted).toMatch(/\d{1,2}\.\d{1,2}\.\d{4}/)
+
+      // French format - using actual implementation format
+      expect(frResult.first()?.formatted).toContain('/')
+
+      // Japanese format - checking for any formatted output
+      expect(jaResult.first()?.formatted).toBeTruthy()
+    })
+  })
+})
 
 // describe('Export Operations', () => {
 //   describe('toSQL()', () => {
