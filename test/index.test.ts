@@ -1,5 +1,5 @@
 import type { CollectionOperations } from '../src/types'
-import { afterEach, describe, expect, it, mock, setSystemTime } from 'bun:test'
+import { afterEach, describe, expect, it, mock, setSystemTime, spyOn } from 'bun:test'
 import { Buffer } from 'node:buffer'
 import { collect } from '../src/collect'
 
@@ -6460,20 +6460,209 @@ describe('Performance Monitoring', () => {
   })
 })
 
-// describe('Development Tools', () => {
-//   describe('playground()', () => {
-//     it('should initialize playground', () => expect(true).toBe(true))
-//   })
+describe('Development Tools', () => {
+  describe('playground()', () => {
+    it('should initialize playground', () => {
+      const consoleSpy = spyOn(console, 'log')
 
-//   describe('explain()', () => {
-//     it('should explain operation pipeline', () => expect(true).toBe(true))
-//   })
+      const collection = collect([1, 2, 3])
+      collection.playground()
 
-//   describe('benchmark()', () => {
-//     it('should benchmark operations', () => expect(true).toBe(true))
-//     it('should calculate complexity', () => expect(true).toBe(true))
-//   })
-// })
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Collection Playground:',
+        expect.objectContaining({
+          items: [1, 2, 3],
+          length: 3,
+          operations: expect.any(Array),
+        }),
+      )
+
+      mock.restore()
+    })
+  })
+
+  // describe('explain()', () => {
+  //   it('should explain operation pipeline', () => {
+  //     // Need to track each operation explicitly
+  //     const collection = collect([1, 2, 3, 4, 5])
+  //     collection.__operations = []
+
+  //     // Use defineProperty to track operations
+  //     const addOperation = (name: string) => {
+  //       collection.__operations.push(name)
+  //       return collection
+  //     }
+
+  //     collection
+  //       .tap(() => addOperation('map'))
+  //       .map(x => x * 2)
+  //       .tap(() => addOperation('filter'))
+  //       .filter(x => x > 5)
+  //       .tap(() => addOperation('sort'))
+  //       .sort((a, b) => b - a)
+
+  //     const result = collection.explain()
+
+  //     expect(result).toBe(
+  //       '1. map\n'
+  //       + '2. filter\n'
+  //       + '3. sort',
+  //     )
+  //   })
+
+  //   it('should track complex operation chains', () => {
+  //     const collection = collect([1, 2, 3])
+  //     collection.__operations = []
+
+  //     const addOperation = (name: string) => {
+  //       collection.__operations.push(name)
+  //       return collection
+  //     }
+
+  //     collection
+  //       .tap(() => addOperation('map'))
+  //       .map(x => x * 2)
+  //       .tap(() => addOperation('filter'))
+  //       .filter(x => x > 2)
+  //       .tap(() => addOperation('chunk'))
+  //       .chunk(2)
+  //       .tap(() => addOperation('flatMap'))
+  //       .flatMap(x => x)
+  //       .tap(() => addOperation('sort'))
+  //       .sort()
+
+  //     const result = collection.explain()
+
+  //     expect(result).toBe(
+  //       '1. map\n'
+  //       + '2. filter\n'
+  //       + '3. chunk\n'
+  //       + '4. flatMap\n'
+  //       + '5. sort',
+  //     )
+  //   })
+
+  //   it('should handle empty pipelines', () => {
+  //     const collection = collect([1, 2, 3])
+  //     collection.__operations = []
+  //     const result = collection.explain()
+  //     expect(result).toBe('')
+  //   })
+
+  //   it('should handle single operation', () => {
+  //     const collection = collect([1, 2, 3])
+  //     collection.__operations = []
+
+  //     collection
+  //       .tap(() => collection.__operations.push('map'))
+  //       .map(x => x * 2)
+
+  //     const result = collection.explain()
+  //     expect(result).toBe('1. map')
+  //   })
+  // })
+
+  describe('benchmark()', () => {
+    it('should benchmark operations', async () => {
+      const result = await collect([1, 2, 3, 4, 5])
+        .map(x => x * 2)
+        .filter(x => x > 5)
+        .sort()
+        .benchmark()
+
+      // Check timing results
+      expect(result.timing).toEqual(
+        expect.objectContaining({
+          filter: expect.any(Number),
+          map: expect.any(Number),
+          reduce: expect.any(Number),
+          sort: expect.any(Number),
+        }),
+      )
+
+      // Check memory results
+      expect(result.memory).toEqual(
+        expect.objectContaining({
+          filter: expect.any(Number),
+          map: expect.any(Number),
+          reduce: expect.any(Number),
+          sort: expect.any(Number),
+        }),
+      )
+
+      // Verify all timings are non-negative
+      Object.values(result.timing).forEach((time) => {
+        expect(time).toBeGreaterThanOrEqual(0)
+      })
+
+      // Verify all memory measurements are non-negative
+      Object.values(result.memory).forEach((mem) => {
+        expect(mem).toBeGreaterThanOrEqual(0)
+      })
+    })
+
+    it('should calculate complexity', async () => {
+      const result = await collect([1, 2, 3, 4, 5])
+        .map(x => x * 2)
+        .filter(x => x > 5)
+        .sort()
+        .benchmark()
+
+      expect(result.complexity).toEqual({
+        filter: 'O(n)',
+        map: 'O(n)',
+        reduce: 'O(n)',
+        sort: 'O(n log n)',
+      })
+    })
+
+    it('should handle empty collections', async () => {
+      const result = await collect([])
+        .map(x => x)
+        .filter(() => true)
+        .benchmark()
+
+      expect(result.timing).toEqual(
+        expect.objectContaining({
+          filter: expect.any(Number),
+          map: expect.any(Number),
+          reduce: expect.any(Number),
+          sort: expect.any(Number),
+        }),
+      )
+
+      expect(result.complexity).toEqual({
+        filter: 'O(n)',
+        map: 'O(n)',
+        reduce: 'O(n)',
+        sort: 'O(n log n)',
+      })
+    })
+
+    it('should benchmark complex operations', async () => {
+      const result = await collect(Array.from({ length: 1000 }, (_, i) => i))
+        .filter(x => x % 2 === 0)
+        .map(x => x * 2)
+        .chunk(10)
+        .flatMap(x => x)
+        .sort((a, b) => b - a)
+        .benchmark()
+
+      // Verify we get timing results for each operation type
+      const operations = ['filter', 'map', 'reduce', 'sort']
+      operations.forEach((op) => {
+        expect(result.timing[op]).toBeDefined()
+        expect(result.memory[op]).toBeDefined()
+        expect(result.complexity[op]).toBeDefined()
+      })
+
+      // Verify sort has higher timing than simple operations due to complexity
+      const sortTime = result.timing.sort
+      const mapTime = result.timing.map
+      expect(sortTime).toBeGreaterThan(mapTime)
+    })
+  })
+})
 
 // describe('Version Control', () => {
 //   describe('diff()', () => {
