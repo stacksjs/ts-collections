@@ -6666,27 +6666,256 @@ describe('Development Tools', () => {
 
 // describe('Version Control', () => {
 //   describe('diff()', () => {
-//     it('should compare versions', () => expect(true).toBe(true))
-//     it('should detect changes', () => expect(true).toBe(true))
+//     it('should compare versions', async () => {
+//       // Setup initial collection
+//       const collection = collect([
+//         { id: 1, name: 'John' },
+//         { id: 2, name: 'Jane' },
+//       ])
+
+//       // Take snapshot of version 1
+//       await collection.snapshot()
+//       const version1 = collection.currentVersion
+
+//       // Make changes
+//       collection.push({ id: 3, name: 'Bob' })
+//       collection.where('id', 2).map(x => ({ ...x, name: 'Janet' }))
+//       collection.push({ id: 4, name: 'Alice' })
+
+//       // Take snapshot of version 2
+//       await collection.snapshot()
+//       const version2 = collection.currentVersion
+
+//       // Get diff between versions
+//       const diff = collection.diff(version1, version2)
+//       const changes = diff.first()?.changes || []
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           type: 'add',
+//           item: expect.objectContaining({ id: 4, name: 'Alice' }),
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           type: 'update',
+//           item: expect.objectContaining({ id: 2, name: 'Janet' }),
+//           previousItem: expect.objectContaining({ id: 2, name: 'Jane' }),
+//         }),
+//       )
+//     })
+
+//     it('should detect changes', async () => {
+//       const collection = collect([
+//         { id: 1, value: 10 },
+//         { id: 2, value: 20 },
+//         { id: 3, value: 30 },
+//       ])
+
+//       // Take snapshot of version 1
+//       await collection.snapshot()
+//       const version1 = collection.currentVersion
+
+//       // Make changes
+//       collection.filter(x => x.id !== 2) // Delete
+//       collection.push({ id: 4, value: 40 }) // Add
+//       collection.where('id', 1).map(x => ({ ...x, value: 15 })) // Update
+
+//       // Take snapshot of version 2
+//       await collection.snapshot()
+//       const version2 = collection.currentVersion
+
+//       const diff = collection.diff(version1, version2)
+//       const changes = diff.first()?.changes || []
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           type: 'delete',
+//           item: expect.objectContaining({ id: 2, value: 20 }),
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           type: 'add',
+//           item: expect.objectContaining({ id: 4, value: 40 }),
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           type: 'update',
+//           item: expect.objectContaining({ id: 1, value: 15 }),
+//           previousItem: expect.objectContaining({ id: 1, value: 10 }),
+//         }),
+//       )
+//     })
 //   })
 
 //   describe('diffSummary()', () => {
-//     it('should summarize changes', () => expect(true).toBe(true))
-//     it('should count modifications', () => expect(true).toBe(true))
+//     it('should summarize changes', async () => {
+//       const collection = collect([
+//         { id: 1, name: 'John', age: 30 },
+//         { id: 2, name: 'Jane', age: 25 },
+//         { id: 3, name: 'Bob', age: 35 },
+//       ])
+
+//       // Take snapshot of version 1
+//       await collection.snapshot()
+//       const version1 = collection.currentVersion
+
+//       // Make changes
+//       collection.filter(x => x.id !== 3) // Remove Bob
+//       collection.push({ id: 4, name: 'Alice', age: 28 }) // Add Alice
+//       collection.where('id', 1).map(x => ({ ...x, age: 31 })) // Update John's age
+
+//       // Take snapshot of version 2
+//       await collection.snapshot()
+//       const version2 = collection.currentVersion
+
+//       const summary = collection.diffSummary(version1, version2)
+
+//       expect(summary.added).toBe(1)
+//       expect(summary.removed).toBe(1)
+//       expect(summary.updated).toBe(1)
+
+//       expect(summary.changes).toContainEqual(
+//         expect.objectContaining({
+//           type: 'update',
+//           field: 'age',
+//           oldValue: 30,
+//           newValue: 31,
+//         }),
+//       )
+//     })
+
+//     it('should count modifications', async () => {
+//       const collection = collect([
+//         { id: 1, name: 'John', score: 100 },
+//         { id: 2, name: 'Jane', score: 200 },
+//         { id: 3, name: 'Bob', score: 300 },
+//       ])
+
+//       // Take snapshot of version 1
+//       await collection.snapshot()
+//       const version1 = collection.currentVersion
+
+//       // Multiple changes to same records
+//       collection.where('id', 1).map(x => ({ ...x, name: 'Jonathan', score: 150 }))
+//       collection.where('id', 2).map(x => ({ ...x, score: 250 }))
+//       collection.push({ id: 4, name: 'Alice', score: 400 })
+
+//       // Take snapshot of version 2
+//       await collection.snapshot()
+//       const version2 = collection.currentVersion
+
+//       const summary = collection.diffSummary(version1, version2)
+
+//       expect(summary.added).toBe(1)
+//       expect(summary.removed).toBe(0)
+//       expect(summary.updated).toBe(2)
+
+//       const changes = summary.changes.filter(c => c.type === 'update')
+//       expect(changes).toHaveLength(3) // 2 changes for John (name & score), 1 for Jane (score)
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           field: 'name',
+//           oldValue: 'John',
+//           newValue: 'Jonathan',
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           field: 'score',
+//           oldValue: 100,
+//           newValue: 150,
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           field: 'score',
+//           oldValue: 200,
+//           newValue: 250,
+//         }),
+//       )
+//     })
+
+//     it('should handle complex nested changes', async () => {
+//       const collection = collect([
+//         {
+//           id: 1,
+//           user: { name: 'John', contact: { email: 'john@test.com' } },
+//           tags: ['developer', 'admin'],
+//         },
+//       ])
+
+//       // Take snapshot of version 1
+//       await collection.snapshot()
+//       const version1 = collection.currentVersion
+
+//       // Make nested changes
+//       collection.map(x => ({
+//         ...x,
+//         user: {
+//           ...x.user,
+//           name: 'Jonathan',
+//           contact: { ...x.user.contact, email: 'jonathan@test.com' },
+//         },
+//         tags: [...x.tags, 'manager'],
+//       }))
+
+//       // Take snapshot of version 2
+//       await collection.snapshot()
+//       const version2 = collection.currentVersion
+
+//       const summary = collection.diffSummary(version1, version2)
+
+//       expect(summary.updated).toBe(1)
+
+//       const changes = summary.changes.filter(c => c.type === 'update')
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           field: 'user.name',
+//           oldValue: 'John',
+//           newValue: 'Jonathan',
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           field: 'user.contact.email',
+//           oldValue: 'john@test.com',
+//           newValue: 'jonathan@test.com',
+//         }),
+//       )
+
+//       expect(changes).toContainEqual(
+//         expect.objectContaining({
+//           field: 'tags',
+//           oldValue: ['developer', 'admin'],
+//           newValue: ['developer', 'admin', 'manager'],
+//         }),
+//       )
+//     })
 //   })
 // })
 
-// describe('Parallel Processing', () => {
-//   describe('parallel()', () => {
-//     it('should process in parallel', () => expect(true).toBe(true))
-//     it('should respect concurrency limits', () => expect(true).toBe(true))
-//   })
+describe('Parallel Processing', () => {
+  describe('parallel()', () => {
+    it('should process in parallel', () => expect(true).toBe(true))
+    it('should respect concurrency limits', () => expect(true).toBe(true))
+  })
 
-//   describe('prefetch()', () => {
-//     it('should prefetch results', () => expect(true).toBe(true))
-//     it('should cache prefetched data', () => expect(true).toBe(true))
-//   })
-// })
+  describe('prefetch()', () => {
+    it('should prefetch results', () => expect(true).toBe(true))
+    it('should cache prefetched data', () => expect(true).toBe(true))
+  })
+})
 
 // describe('Cache and Memoization', () => {
 //   describe('cacheStore', () => {

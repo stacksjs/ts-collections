@@ -65,3 +65,34 @@ export function getNextTimestamp(date: Date, interval: 'day' | 'week' | 'month' 
 
   return nextDate.getTime()
 }
+
+// function deepEqual(a: any, b: any): boolean {
+//   if (a === b)
+//     return true
+
+//   if (typeof a !== 'object' || typeof b !== 'object')
+//     return false
+//   if (a === null || b === null)
+//     return false
+
+//   const keysA = Object.keys(a)
+//   const keysB = Object.keys(b)
+
+//   if (keysA.length !== keysB.length)
+//     return false
+
+//   for (const key of keysA) {
+//     if (!keysB.includes(key))
+//       return false
+//     if (!deepEqual(a[key], b[key]))
+//       return false
+//   }
+
+//   return true
+// }
+
+// function getItemKey(item: any): string {
+//   if ('id' in item)
+//     return String(item.id)
+//   return JSON.stringify(item)
+// }

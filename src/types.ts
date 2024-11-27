@@ -123,9 +123,15 @@ export interface AnomalyDetectionOptions<T> {
   features?: Array<keyof T>
 }
 
-/**
- * Types for versioning and change tracking
- */
+export interface VersionStore<T> {
+  currentVersion: number
+  snapshots: Map<number, {
+    items: T[]
+    timestamp: Date
+  }>
+  changes: VersionInfo<T>[]
+}
+
 export interface VersionInfo<T> {
   version: number
   timestamp: Date
@@ -134,16 +140,6 @@ export interface VersionInfo<T> {
     item: T
     previousItem?: T
   }>
-}
-
-export interface VersionStore<T> {
-  currentVersion: number
-  snapshots: Map<number, {
-    items: T[]
-    timestamp: Date
-    metadata?: Record<string, any>
-  }>
-  changes: VersionInfo<T>[]
 }
 
 /**
@@ -527,19 +523,23 @@ export interface CollectionOperations<T> extends Collection<T> {
   removeOutliers: <K extends keyof T>(key: K, threshold?: number) => CollectionOperations<T>
 
   // Versioning & History
-  diff: (version1: number, version2: number) => CollectionOperations<VersionInfo<T>>
-  diffSummary: (version1: number, version2: number) => {
-    added: number
-    removed: number
-    updated: number
-    changes: Array<{
-      type: 'add' | 'update' | 'delete'
-      field?: keyof T
-      oldValue?: any
-      newValue?: any
-    }>
-  }
-  setDiff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
+  // readonly currentVersion: number
+  // snapshot: () => Promise<number>
+  // hasVersion: (version: number) => boolean
+  // getVersion: (version: number) => CollectionOperations<T> | null
+  // diff: (version1: number, version2: number) => CollectionOperations<VersionInfo<T>>
+  // diffSummary: (version1: number, version2: number) => {
+  //   added: number
+  //   removed: number
+  //   updated: number
+  //   changes: Array<{
+  //     type: 'add' | 'update' | 'delete'
+  //     field?: keyof T
+  //     oldValue?: any
+  //     newValue?: any
+  //   }>
+  // }
+  // setDiff: (other: T[] | CollectionOperations<T>) => CollectionOperations<T>
 
   // Advanced Querying & Search
   /**

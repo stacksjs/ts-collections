@@ -1,4 +1,4 @@
-import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RecordMerge, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema, VersionInfo, VersionStore } from './types'
+import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RecordMerge, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
 import { getNextTimestamp, isSameDay } from './utils'
@@ -27,11 +27,11 @@ export function collect<T>(items: T[] | Iterable<T>): CollectionOperations<T> {
  * @internal
  */
 function createCollectionOperations<T>(collection: Collection<T>): CollectionOperations<T> {
-  const versionStore: VersionStore<T> = {
-    currentVersion: 0,
-    snapshots: new Map(),
-    changes: [],
-  }
+  // const versionStore: VersionStore<T> = {
+  //   currentVersion: 0,
+  //   snapshots: new Map(),
+  //   changes: [],
+  // }
 
   // Helper function for fuzzy search scoring
   function calculateFuzzyScore(query: string, value: string): number {
@@ -978,140 +978,140 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       return collect(Array.from(new Set(collection.items.map(item => item[key]))))
     },
 
-    setDiff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
-      const otherSet = new Set(Array.isArray(other) ? other : other.items)
-      return collect(collection.items.filter(item => !otherSet.has(item)))
-    },
+    // setDiff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
+    //   const otherSet = new Set(Array.isArray(other) ? other : other.items)
+    //   return collect(collection.items.filter(item => !otherSet.has(item)))
+    // },
 
-    diff(version1: number, version2: number): CollectionOperations<VersionInfo<T>> {
-      // Ensure both versions exist
-      if (!versionStore.snapshots.has(version1) || !versionStore.snapshots.has(version2)) {
-        throw new Error('One or both versions do not exist')
-      }
+    // get currentVersion(): number {
+    //   return versionStore.currentVersion
+    // },
 
-      // Get snapshots for both versions
-      const snapshot1 = versionStore.snapshots.get(version1)!
-      const snapshot2 = versionStore.snapshots.get(version2)!
+    // async snapshot(): Promise<number> {
+    //   const version = versionStore.currentVersion + 1
+    //   versionStore.snapshots.set(version, {
+    //     items: [...collection.items],
+    //     timestamp: new Date(),
+    //   })
+    //   versionStore.currentVersion = version
+    //   return version
+    // },
 
-      // Initialize changes array
-      const changes: VersionInfo<T>['changes'] = []
+    // hasVersion(version: number): boolean {
+    //   return versionStore.snapshots.has(version)
+    // },
 
-      // Find added items (present in version2 but not in version1)
-      const addedItems = snapshot2.items.filter(item2 =>
-        !snapshot1.items.some(item1 =>
-          JSON.stringify(item1) === JSON.stringify(item2),
-        ),
-      )
+    // getVersion(version: number): CollectionOperations<T> | null {
+    //   const snapshot = versionStore.snapshots.get(version)
+    //   if (!snapshot)
+    //     return null
+    //   return collect(snapshot.items)
+    // },
 
-      // Find removed items (present in version1 but not in version2)
-      const removedItems = snapshot1.items.filter(item1 =>
-        !snapshot2.items.some(item2 =>
-          JSON.stringify(item1) === JSON.stringify(item2),
-        ),
-      )
+    // diff(version1: number, version2: number): CollectionOperations<VersionInfo<T>> {
+    //   // Ensure both versions exist
+    //   const snapshot1 = versionStore.snapshots.get(version1)
+    //   const snapshot2 = versionStore.snapshots.get(version2)
 
-      // Find updated items (have the same keys but different values)
-      const updatedItems = snapshot2.items.filter(item2 =>
-        snapshot1.items.some((item1) => {
-          // Properly type cast the objects for Object.keys
-          const item1Obj = item1 as Record<string, unknown>
-          const item2Obj = item2 as Record<string, unknown>
+    //   if (!snapshot1 || !snapshot2) {
+    //     throw new Error('One or both versions do not exist')
+    //   }
 
-          const item1Keys = Object.keys(item1Obj)
-          const item2Keys = Object.keys(item2Obj)
+    //   const changes: Array<{
+    //     type: 'add' | 'update' | 'delete'
+    //     item: T
+    //     previousItem?: T
+    //   }> = []
 
-          // Check if items have the same keys
-          const sameKeys = item1Keys.length === item2Keys.length
-            && item1Keys.every(key => item2Keys.includes(key))
+    //   // Create maps for easier lookup
+    //   const items1 = new Map(snapshot1.items.map(item => [getItemKey(item), item]))
+    //   const items2 = new Map(snapshot2.items.map(item => [getItemKey(item), item]))
 
-          // Check if any values are different
-          const hasChanges = sameKeys && item1Keys.some(key =>
-            JSON.stringify(item1Obj[key]) !== JSON.stringify(item2Obj[key]),
-          )
+    //   // Find deletions (in items1 but not in items2)
+    //   for (const [key, item] of items1) {
+    //     if (!items2.has(key)) {
+    //       changes.push({ type: 'delete', item })
+    //     }
+    //   }
 
-          return sameKeys && hasChanges
-        }),
-      )
+    //   // Find additions and updates
+    //   for (const [key, item] of items2) {
+    //     if (!items1.has(key)) {
+    //       changes.push({ type: 'add', item })
+    //     }
+    //     else {
+    //       const oldItem = items1.get(key)!
+    //       if (!deepEqual(oldItem, item)) {
+    //         changes.push({
+    //           type: 'update',
+    //           item,
+    //           previousItem: oldItem,
+    //         })
+    //       }
+    //     }
+    //   }
 
-      // Record all changes with their types
-      addedItems.forEach((item) => {
-        changes.push({
-          type: 'add',
-          item,
-        })
-      })
+    //   return collect([{
+    //     version: version2,
+    //     timestamp: new Date(),
+    //     changes,
+    //   }])
+    // },
 
-      removedItems.forEach((item) => {
-        changes.push({
-          type: 'delete',
-          item,
-        })
-      })
+    // diffSummary(version1: number, version2: number) {
+    //   const diff = this.diff(version1, version2)
+    //   const changes = diff.first()?.changes || []
 
-      updatedItems.forEach((item) => {
-        // Find the previous version of this item
-        const itemObj = item as Record<string, unknown>
-        const previousItem = snapshot1.items.find((item1) => {
-          const item1Obj = item1 as Record<string, unknown>
-          return Object.keys(item1Obj).every(key =>
-            Object.keys(itemObj).includes(key),
-          )
-        })
+    //   const result = {
+    //     added: 0,
+    //     removed: 0,
+    //     updated: 0,
+    //     changes: [] as Array<{
+    //       type: 'add' | 'update' | 'delete'
+    //       field?: keyof T
+    //       oldValue?: any
+    //       newValue?: any
+    //     }>,
+    //   }
 
-        changes.push({
-          type: 'update',
-          item,
-          previousItem,
-        })
-      })
+    //   for (const change of changes) {
+    //     switch (change.type) {
+    //       case 'add':
+    //         result.added++
+    //         result.changes.push({ type: 'add' })
+    //         break
 
-      // Create a VersionInfo object with the changes
-      const versionInfo: VersionInfo<T>[] = [{
-        version: Math.max(version1, version2),
-        timestamp: new Date(),
-        changes,
-      }]
+    //       case 'delete':
+    //         result.removed++
+    //         result.changes.push({ type: 'delete' })
+    //         break
 
-      return collect(versionInfo)
-    },
+    //       case 'update': {
+    //         result.updated++
 
-    diffSummary(version1: number, version2: number) {
-      const diffResult = this.diff(version1, version2)
-      // Properly type the first() result and access to changes
-      const versionInfo = diffResult.first() as VersionInfo<T> | undefined
-      const changes = versionInfo?.changes || []
+    //         // Compare fields to generate detailed changes
+    //         if (change.previousItem && change.item) {
+    //           const oldItem = change.previousItem
+    //           const newItem = change.item
 
-      return {
-        added: changes.filter((c: { type: 'add' | 'update' | 'delete' }) => c.type === 'add').length,
-        removed: changes.filter((c: { type: 'add' | 'update' | 'delete' }) => c.type === 'delete').length,
-        updated: changes.filter((c: { type: 'add' | 'update' | 'delete' }) => c.type === 'update').length,
-        changes: changes.map((change: {
-          type: 'add' | 'update' | 'delete'
-          item: T
-          previousItem?: T
-        }) => {
-          if (change.type === 'update' && change.previousItem) {
-            // Properly type cast the objects for Object.keys
-            const itemObj = change.item as Record<string, unknown>
-            const prevItemObj = change.previousItem as Record<string, unknown>
+    //           for (const key of Object.keys(newItem) as Array<keyof T>) {
+    //             if (!deepEqual(oldItem[key], newItem[key])) {
+    //               result.changes.push({
+    //                 type: 'update',
+    //                 field: key,
+    //                 oldValue: oldItem[key],
+    //                 newValue: newItem[key],
+    //               })
+    //             }
+    //           }
+    //         }
+    //         break
+    //       }
+    //     }
+    //   }
 
-            const changedFields = Object.keys(itemObj).filter((key) => {
-              return JSON.stringify(itemObj[key]) !== JSON.stringify(prevItemObj[key])
-            })
-
-            return changedFields.map(field => ({
-              type: change.type,
-              field: field as keyof T,
-              oldValue: change.previousItem![field as keyof T],
-              newValue: change.item[field as keyof T],
-            }))
-          }
-          return [{
-            type: change.type,
-          }]
-        }).flat(),
-      }
-    },
+    //   return result
+    // },
 
     intersect(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
       const otherSet = new Set(Array.isArray(other) ? other : other.items)
