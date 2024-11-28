@@ -1,6 +1,25 @@
 # Changelog
 
 
+## v0.2.0...main
+
+[compare changes](https://github.com/stacksjs/ts-starter/compare/v0.2.0...main)
+
+### 🏡 Chore
+
+- Comment out one integrate test ([00b859d](https://github.com/stacksjs/ts-starter/commit/00b859d))
+- Improve sentiment logic slightly ([cfeac1c](https://github.com/stacksjs/ts-starter/commit/cfeac1c))
+- Resolve lint and type issue ([ea74cd7](https://github.com/stacksjs/ts-starter/commit/ea74cd7))
+- Improve symmetricDiff typing ([bbc3f86](https://github.com/stacksjs/ts-starter/commit/bbc3f86))
+- Improve differentiate typing ([09758e9](https://github.com/stacksjs/ts-starter/commit/09758e9))
+- Resolve type issues ([6d04384](https://github.com/stacksjs/ts-starter/commit/6d04384))
+- Improve when and unless typing ([e040b21](https://github.com/stacksjs/ts-starter/commit/e040b21))
+- Resolve type issues ([e963ffd](https://github.com/stacksjs/ts-starter/commit/e963ffd))
+
+### ❤️ Contributors
+
+- Chris ([@chrisbbreuer](http://github.com/chrisbbreuer))
+
 ## v0.1.2...main
 
 [compare changes](https://github.com/stacksjs/ts-starter/compare/v0.1.2...main)
