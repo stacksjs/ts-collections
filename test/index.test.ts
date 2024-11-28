@@ -8006,12 +8006,241 @@ describe('Machine Learning Utilities', () => {
   })
 })
 
-// describe('Type Handling', () => {
-//   describe('KeyType', () => {
-//     it('should enforce matching key types', () => expect(true).toBe(true))
-//     it('should handle type constraints', () => expect(true).toBe(true))
-//   })
-// })
+describe('Type Handling', () => {
+  // Test interfaces and types
+  interface User {
+    id: number
+    name: string
+    age: number
+  }
+
+  interface ExtendedUser extends User {
+    email: string
+  }
+
+  interface NumericKeys {
+    [key: number]: string
+  }
+
+  interface StringKeys {
+    [key: string]: number
+  }
+
+  describe('KeyType', () => {
+    it('should enforce matching key types', () => {
+      const users: User[] = [
+        { id: 1, name: 'John', age: 25 },
+        { id: 2, name: 'Jane', age: 30 },
+      ]
+
+      const collection = collect(users)
+
+      // Test type-safe key access
+      const byId = collection.keyBy('id')
+      expect(byId.get(1)?.name).toBe('John')
+
+      // Test type-safe pluck
+      const names = collection.pluck('name')
+      expect(names.toArray()).toEqual(['John', 'Jane'])
+
+      // Test type-safe where clause
+      const filtered = collection.where('age', 25)
+      expect(filtered.first()?.name).toBe('John')
+
+      // Test type inference with map
+      const mapped = collection.map(user => ({
+        ...user,
+        fullName: `${user.name} Doe`,
+      }))
+      expect(mapped.first()?.fullName).toBe('John Doe')
+
+      // Test type safety with pick
+      const picked = collection.pick('name', 'age')
+      expect(picked.first()).toEqual({ name: 'John', age: 25 })
+
+      // Test omit type safety
+      const omitted = collection.omit('age')
+      expect(omitted.first()).toEqual({ id: 1, name: 'John' })
+    })
+
+    it('should handle type constraints', () => {
+      // Test numeric key constraints
+      const numCollection = collect([
+        { key: 1, value: 'one' },
+        { key: 2, value: 'two' },
+      ])
+      expect(numCollection.pluck('value').first()).toBe('one')
+
+      // Test string key constraints
+      const strCollection = collect([
+        { key: 'one', value: 1 },
+        { key: 'two', value: 2 },
+      ])
+      expect(strCollection.pluck('value').first()).toBe(1)
+
+      // Test inheritance constraints
+      const extendedUsers: ExtendedUser[] = [
+        { id: 1, name: 'John', age: 25, email: 'john@example.com' },
+        { id: 2, name: 'Jane', age: 30, email: 'jane@example.com' },
+      ]
+      const extCollection = collect(extendedUsers)
+
+      // Should work with parent type keys
+      const names = extCollection.pluck('name')
+      expect(names.toArray()).toEqual(['John', 'Jane'])
+
+      // Should work with extended type keys
+      const emails = extCollection.pluck('email')
+      expect(emails.toArray()).toEqual(['john@example.com', 'jane@example.com'])
+
+      // Test union type constraints
+      type Status = 'active' | 'inactive'
+      interface WithStatus {
+        id: number
+        status: Status
+      }
+
+      const withStatus: WithStatus[] = [
+        { id: 1, status: 'active' },
+        { id: 2, status: 'inactive' },
+      ]
+      const statusCollection = collect(withStatus)
+
+      // Should enforce union type constraints
+      const active = statusCollection.where('status', 'active')
+      expect(active.first()?.id).toBe(1)
+
+      // Test generic type constraints
+      interface GenericItem<T> {
+        key: string
+        value: T
+      }
+
+      const numbers: GenericItem<number>[] = [
+        { key: 'a', value: 1 },
+        { key: 'b', value: 2 },
+      ]
+      const genericCollection = collect(numbers)
+
+      // Should maintain generic type constraints
+      const values = genericCollection.pluck('value')
+      const sum = values.sum()
+      expect(sum).toBe(3)
+    })
+
+    it('should handle advanced type operations', () => {
+      interface Nested {
+        user: User
+        metadata: {
+          tags: string[]
+          created: Date
+        }
+      }
+
+      const nested: Nested[] = [
+        {
+          user: { id: 1, name: 'John', age: 25 },
+          metadata: {
+            tags: ['admin', 'user'],
+            created: new Date('2023-01-01'),
+          },
+        },
+        {
+          user: { id: 2, name: 'Jane', age: 30 },
+          metadata: {
+            tags: ['user'],
+            created: new Date('2023-01-02'),
+          },
+        },
+      ]
+
+      const nestedCollection = collect(nested)
+
+      // Test nested type access
+      const users = nestedCollection.pluck('user')
+      expect(users.first()?.name).toBe('John')
+
+      // Test deep nested type access
+      type DeepPick<T, K extends string> = K extends keyof T
+        ? T[K]
+        : K extends `${infer A}.${infer B}`
+          ? A extends keyof T
+            ? DeepPick<T[A], B>
+            : never
+          : never
+
+      function getDeepValue<T, K extends string>(
+        obj: T,
+        path: K,
+      ): DeepPick<T, K> {
+        return path.split('.').reduce((o: any, k) => o?.[k], obj)
+      }
+
+      const tags = nestedCollection.map(item =>
+        getDeepValue(item, 'metadata.tags'),
+      )
+      expect(tags.first()).toEqual(['admin', 'user'])
+
+      // Test type transformations
+      interface TransformedUser {
+        fullName: string
+        yearOfBirth: number
+      }
+
+      const transformed = nestedCollection.transform<TransformedUser>({
+        fullName: item => `${item.user.name} Doe`,
+        yearOfBirth: item => new Date().getFullYear() - item.user.age,
+      })
+
+      const firstTransformed = transformed.first()
+      expect(firstTransformed?.fullName).toBe('John Doe')
+      expect(typeof firstTransformed?.yearOfBirth).toBe('number')
+    })
+
+    it('should handle collection operations with type constraints', () => {
+      const users: User[] = [
+        { id: 1, name: 'John', age: 25 },
+        { id: 2, name: 'Jane', age: 30 },
+      ]
+
+      const collection = collect(users)
+
+      // Test type-safe sorting
+      const sorted = collection.sortBy('age', 'asc')
+      expect(sorted.first()?.age).toBe(25)
+
+      // Test type-safe grouping
+      const grouped = collection.groupBy('age')
+      expect(grouped.get(25)?.first()?.name).toBe('John')
+
+      // Test type inference with reduce
+      const averageAge = collection.reduce((acc, user) => acc + user.age, 0) / collection.count()
+      expect(averageAge).toBe(27.5)
+
+      // Test type safety with filter
+      const filtered = collection.filter(user => user.age > 25)
+      expect(filtered.count()).toBe(1)
+      expect(filtered.first()?.name).toBe('Jane')
+
+      // Test conditional type operations with explicit sorting
+      const whenResult = collection
+        .when(true, users => users.filter(u => u.age < 30))
+        .when(false, users => users.filter(u => u.age > 30))
+      expect(whenResult.first()?.age).toBe(25)
+
+      // Test type preservation in chained operations
+      const result = collection
+        .filter(user => user.age > 20)
+        .map(user => ({ ...user, isAdult: true }))
+        .sortBy('age', 'asc')
+        .take(1)
+
+      const firstResult = result.first()
+      expect(firstResult?.isAdult).toBe(true)
+      expect(firstResult?.name).toBe('John')
+    })
+  })
+})
 
 // describe('Geographic Calculations', () => {
 //   describe('haversine()', () => {
