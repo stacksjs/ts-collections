@@ -8018,14 +8018,6 @@ describe('Type Handling', () => {
     email: string
   }
 
-  interface NumericKeys {
-    [key: number]: string
-  }
-
-  interface StringKeys {
-    [key: string]: number
-  }
-
   describe('KeyType', () => {
     it('should enforce matching key types', () => {
       const users: User[] = [
@@ -8242,12 +8234,166 @@ describe('Type Handling', () => {
   })
 })
 
-// describe('Geographic Calculations', () => {
-//   describe('haversine()', () => {
-//     it('should calculate great circle distance', () => expect(true).toBe(true))
-//     it('should handle different units', () => expect(true).toBe(true))
-//   })
-// })
+describe('Geographic Calculations', () => {
+  describe('geoDistance()', () => {
+    interface Location {
+      id: number
+      coords: [number, number] // Explicitly typed as tuple
+      name: string
+    }
+
+    // Test data with known distances
+    const locations: Location[] = [
+      { id: 1, coords: [40.7128, -74.0060], name: 'New York' },
+      { id: 2, coords: [51.5074, -0.1278], name: 'London' },
+      { id: 3, coords: [35.6762, 139.6503], name: 'Tokyo' },
+      { id: 4, coords: [-33.8688, 151.2093], name: 'Sydney' },
+      { id: 5, coords: [-22.9068, -43.1729], name: 'Rio' },
+    ]
+
+    // distances based on actual Haversine formula calculations
+    const knownDistances = {
+      'New York-London': 5570,
+      'London-Tokyo': 9559,
+      'Tokyo-Sydney': 7822,
+      'Sydney-Rio': 13521,
+      'Rio-New York': 7759,
+    }
+
+    const collection = collect(locations)
+
+    it('should calculate distance between two points in kilometers', () => {
+      const nyToLondon = collection
+        .where('name', 'New York')
+        .geoDistance('coords', [51.5074, -0.1278])
+        .first()
+
+      expect(nyToLondon).toBeDefined()
+      expect(nyToLondon?.distance).toBeCloseTo(knownDistances['New York-London'], -2)
+    })
+
+    it('should calculate distance between two points in miles', () => {
+      const nyToLondon = collection
+        .where('name', 'New York')
+        .geoDistance('coords', [51.5074, -0.1278], 'mi')
+        .first()
+
+      const expectedMiles = knownDistances['New York-London'] * 0.621371
+
+      expect(nyToLondon).toBeDefined()
+      expect(nyToLondon?.distance).toBeCloseTo(expectedMiles, -2)
+    })
+
+    it('should handle antipodal points', () => {
+      const antipodes = collect([
+        { coords: [0, 0] },
+      ]).geoDistance('coords', [0, 180]).first()
+
+      // Updated to match actual Haversine formula result
+      expect(antipodes?.distance).toBeCloseTo(20015.09, 0)
+    })
+
+    it('should handle same point', () => {
+      const samePoint = collect([
+        { coords: [40.7128, -74.0060] },
+      ]).geoDistance('coords', [40.7128, -74.0060]).first()
+
+      expect(samePoint?.distance).toBe(0)
+    })
+
+    it('should handle null island', () => {
+      const nullIsland = collect([
+        { coords: [0, 0] },
+      ]).geoDistance('coords', [0, 0]).first()
+
+      expect(nullIsland?.distance).toBe(0)
+    })
+
+    it('should calculate correct distances for all city pairs', () => {
+      const cities = Object.keys(knownDistances)
+
+      cities.forEach((cityPair) => {
+        const [city1, city2] = cityPair.split('-')
+
+        const city1Data = collection.where('name', city1).first()
+        const city2Data = collection.where('name', city2).first()
+
+        if (city1Data && city2Data) {
+          const distance = collection
+            .where('name', city1)
+            .geoDistance('coords', city2Data.coords)
+            .first()
+            ?.distance
+
+          expect(distance).toBeDefined()
+          expect(distance).toBeCloseTo(knownDistances[cityPair as keyof typeof knownDistances], -2)
+        }
+      })
+    })
+
+    it('should handle edge cases with invalid coordinates', () => {
+      const invalidCoords = [
+        { coords: [91, 0] }, // Invalid latitude
+        { coords: [0, 181] }, // Invalid longitude
+        { coords: [-91, 0] }, // Invalid latitude
+        { coords: [0, -181] }, // Invalid longitude
+      ]
+
+      invalidCoords.forEach((coord) => {
+        expect(() => {
+          collect([coord]).geoDistance('coords', [0, 0]).toArray()
+        }).toThrow('Invalid coordinates')
+      })
+    })
+
+    it('should handle missing coordinates gracefully', () => {
+      const missingCoords = collect([
+        { coords: undefined },
+        { coords: null },
+        {},
+      ])
+
+      expect(() => {
+        missingCoords.geoDistance('coords', [0, 0])
+      }).toThrow('Invalid coordinates')
+    })
+
+    describe('Performance', () => {
+      const largeDataset = Array.from({ length: 10000 }, _ => ({
+        coords: [
+          Math.random() * 170 - 85, // Valid latitude range
+          Math.random() * 350 - 175, // Valid longitude range
+        ],
+      }))
+
+      it('should handle large datasets efficiently', () => {
+        const start = performance.now()
+
+        const results = collect(largeDataset)
+          .geoDistance('coords', [0, 0])
+          .toArray()
+
+        const end = performance.now()
+
+        expect(results.length).toBe(largeDataset.length)
+        expect(end - start).toBeLessThan(1000)
+      })
+
+      it('should maintain accuracy with large datasets', () => {
+        const results = collect(largeDataset)
+          .geoDistance('coords', [0, 0])
+          .toArray()
+
+        const maxPossibleDistance = 20037.5
+
+        results.forEach((result) => {
+          expect(result.distance).toBeLessThanOrEqual(maxPossibleDistance)
+          expect(result.distance).toBeGreaterThanOrEqual(0)
+        })
+      })
+    })
+  })
+})
 
 // describe('Collection Core', () => {
 //   describe('createCollectionOperations()', () => {
@@ -8257,9 +8403,3 @@ describe('Type Handling', () => {
 //   })
 // })
 //
-
-function calculateVariance(numbers: number[]): number {
-  const mean = numbers.reduce((a, b) => a + b, 0) / numbers.length
-  const squaredDiffs = numbers.map(x => (x - mean) ** 2)
-  return squaredDiffs.reduce((a, b) => a + b, 0) / numbers.length
-}

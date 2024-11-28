@@ -1,7 +1,7 @@
 import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RecordMerge, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
-import { getNextTimestamp, isSameDay } from './utils'
+import { getNextTimestamp, isSameDay, validateCoordinates } from './utils'
 
 /**
  * Creates a new collection with optimized performance
@@ -2653,21 +2653,34 @@ ${collection.items.map(item =>
     // Specialized data types support
     geoDistance<K extends keyof T>(key: K, point: [number, number], unit: 'km' | 'mi' = 'km'): CollectionOperations<T & { distance: number }> {
       function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+        // Validate coordinates
+        if (!validateCoordinates(lat1, lon1) || !validateCoordinates(lat2, lon2)) {
+          throw new Error('Invalid coordinates')
+        }
+
         const R = unit === 'km' ? 6371 : 3959 // Earth's radius in km or miles
         const dLat = (lat2 - lat1) * Math.PI / 180
         const dLon = (lon2 - lon1) * Math.PI / 180
+        const lat1Rad = lat1 * Math.PI / 180
+        const lat2Rad = lat2 * Math.PI / 180
+
         const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-          + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+          + Math.cos(lat1Rad) * Math.cos(lat2Rad)
           * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
         return R * c
       }
 
       return collect(collection.items.map((item) => {
         const coords = item[key] as unknown as [number, number]
+        if (!coords || !Array.isArray(coords) || coords.length !== 2) {
+          throw new Error('Invalid coordinates')
+        }
+
         return {
           ...item,
-          distance: haversine(point[0], point[1], coords[0], coords[1]),
+          distance: haversine(coords[0], coords[1], point[0], point[1]),
         }
       }))
     },
