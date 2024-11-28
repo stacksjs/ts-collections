@@ -7350,17 +7350,174 @@ describe('Cache and Memoization', () => {
   })
 })
 
-// describe('Conditional Operations', () => {
-//   describe('when()', () => {
-//     it('should execute when condition is true', () => expect(true).toBe(true))
-//     it('should skip when condition is false', () => expect(true).toBe(true))
-//   })
+describe('Conditional Operations', () => {
+  describe('when()', () => {
+    it('should execute when condition is true', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .when(true, collection => collection.filter(x => x > 2))
+        .toArray()
 
-//   describe('unless()', () => {
-//     it('should execute when condition is false', () => expect(true).toBe(true))
-//     it('should skip when condition is true', () => expect(true).toBe(true))
-//   })
-// })
+      expect(result).toEqual([3, 4, 5])
+    })
+
+    it('should skip when condition is false', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .when(false, collection => collection.filter(x => x > 2))
+        .toArray()
+
+      expect(result).toEqual([1, 2, 3, 4, 5])
+    })
+
+    it('should handle callback condition', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .when(
+          collection => collection.sum() > 10,
+          collection => collection.filter(x => x > 2),
+        )
+        .toArray()
+
+      expect(result).toEqual([3, 4, 5])
+    })
+
+    it('should chain multiple when operations', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .when(true, collection => collection.filter(x => x > 2))
+        .when(false, collection => collection.filter(x => x > 4))
+        .toArray()
+
+      expect(result).toEqual([3, 4, 5])
+    })
+
+    it('should handle empty collections', () => {
+      const data: number[] = []
+      const result = collect(data)
+        .when(true, collection => collection.filter(x => x > 2))
+        .toArray()
+
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('unless()', () => {
+    it('should execute when condition is false', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .unless(false, collection => collection.filter(x => x > 2))
+        .toArray()
+
+      expect(result).toEqual([3, 4, 5])
+    })
+
+    it('should skip when condition is true', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .unless(true, collection => collection.filter(x => x > 2))
+        .toArray()
+
+      expect(result).toEqual([1, 2, 3, 4, 5])
+    })
+
+    it('should handle callback condition', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .unless(
+          collection => collection.sum() < 10,
+          collection => collection.filter(x => x > 2),
+        )
+        .toArray()
+
+      expect(result).toEqual([3, 4, 5])
+    })
+
+    it('should chain multiple unless operations', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .unless(false, collection => collection.filter(x => x > 2))
+        .unless(true, collection => collection.filter(x => x > 4))
+        .toArray()
+
+      expect(result).toEqual([3, 4, 5])
+    })
+
+    it('should handle empty collections', () => {
+      const data: number[] = []
+      const result = collect(data)
+        .unless(false, collection => collection.filter(x => x > 2))
+        .toArray()
+
+      expect(result).toEqual([])
+    })
+
+    it('should work with complex transformations', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .unless(
+          collection => collection.average() < 3,
+          collection => collection
+            .map(x => x * 2)
+            .filter(x => x > 5)
+            .sort(),
+        )
+        .toArray()
+
+      expect(result).toEqual([6, 8, 10])
+    })
+  })
+
+  describe('when() and unless() interaction', () => {
+    it('should handle chaining when and unless', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .when(true, collection => collection.filter(x => x > 2))
+        .unless(false, collection => collection.map(x => x * 2))
+        .toArray()
+
+      expect(result).toEqual([6, 8, 10])
+    })
+
+    it('should handle complex conditions', () => {
+      interface Item { id: number, value: string }
+      const data: Item[] = [
+        { id: 1, value: 'a' },
+        { id: 2, value: 'b' },
+        { id: 3, value: 'c' },
+      ]
+
+      const result = collect(data)
+        .when(
+          collection => collection.count() > 2,
+          collection => collection.filter(item => item.id > 1),
+        )
+        .unless(
+          collection => collection.count() < 2,
+          collection => collection.map(item => item.value),
+        )
+        .toArray()
+
+      expect(result).toEqual(['b', 'c'])
+    })
+
+    it('should handle nested transformations', () => {
+      const data = [1, 2, 3, 4, 5]
+      const result = collect(data)
+        .when(true, collection =>
+          collection
+            .when(true, inner => inner.filter(x => x > 2))
+            .map(x => x * 2))
+        .unless(false, collection =>
+          collection
+            .unless(true, inner => inner.filter(x => x > 10))
+            .sort((a, b) => b - a))
+        .toArray()
+
+      expect(result).toEqual([10, 8, 6])
+    })
+  })
+})
 
 // describe('Navigation and Paging', () => {
 //   describe('forPage()', () => {
