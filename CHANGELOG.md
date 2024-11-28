@@ -1,6 +1,42 @@
 # Changelog
 
 
+## v0.1.2...main
+
+[compare changes](https://github.com/stacksjs/ts-starter/compare/v0.1.2...main)
+
+### 🏡 Chore
+
+- Update bun ([e69f97a](https://github.com/stacksjs/ts-starter/commit/e69f97a))
+- Add String Operations tests ([15ebc3e](https://github.com/stacksjs/ts-starter/commit/15ebc3e))
+- Add Set Operations test ([c8a91a8](https://github.com/stacksjs/ts-starter/commit/c8a91a8))
+- Add Advanced Math Operations tests ([34bacc9](https://github.com/stacksjs/ts-starter/commit/34bacc9))
+- Add Text Analysis tests ([be0d513](https://github.com/stacksjs/ts-starter/commit/be0d513))
+- Add Data Quality Operations tests ([604fbeb](https://github.com/stacksjs/ts-starter/commit/604fbeb))
+- Add Type Operations tests ([65aa2b3](https://github.com/stacksjs/ts-starter/commit/65aa2b3))
+- Add Specialized Data Types tests ([6ca46b1](https://github.com/stacksjs/ts-starter/commit/6ca46b1))
+- Add Database-like Operations tests ([5861e1f](https://github.com/stacksjs/ts-starter/commit/5861e1f))
+- Add Export Operations tests ([e6e357d](https://github.com/stacksjs/ts-starter/commit/e6e357d))
+- Add Streaming Operations tests ([1315cb0](https://github.com/stacksjs/ts-starter/commit/1315cb0))
+- Lint ([f2aafb0](https://github.com/stacksjs/ts-starter/commit/f2aafb0))
+- Add Performance Monitoring tests ([e17414e](https://github.com/stacksjs/ts-starter/commit/e17414e))
+- Add Development Tools tests ([045c46b](https://github.com/stacksjs/ts-starter/commit/045c46b))
+- Temp disable version control logic ([447236b](https://github.com/stacksjs/ts-starter/commit/447236b))
+- Add Parallel Processing tests ([d2fee98](https://github.com/stacksjs/ts-starter/commit/d2fee98))
+- Add Cache and Memoization tests ([03e5b17](https://github.com/stacksjs/ts-starter/commit/03e5b17))
+- Add Conditional Operations tests ([5078341](https://github.com/stacksjs/ts-starter/commit/5078341))
+- Add Navigation and Paging tests ([dbeb8ec](https://github.com/stacksjs/ts-starter/commit/dbeb8ec))
+- Add Fuzzy Matching tests ([596c479](https://github.com/stacksjs/ts-starter/commit/596c479))
+- Add Machine Learning Utilities tests ([4c2af72](https://github.com/stacksjs/ts-starter/commit/4c2af72))
+- Add Type Handling tests ([4205984](https://github.com/stacksjs/ts-starter/commit/4205984))
+- Add Geographic Calculations tests ([efaa021](https://github.com/stacksjs/ts-starter/commit/efaa021))
+- Add Collection Core tests ([6ad7d3b](https://github.com/stacksjs/ts-starter/commit/6ad7d3b))
+- Lint ([18110b5](https://github.com/stacksjs/ts-starter/commit/18110b5))
+
+### ❤️ Contributors
+
+- Chris ([@chrisbbreuer](http://github.com/chrisbbreuer))
+
 ## v0.1.1...main
 
 [compare changes](https://github.com/stacksjs/ts-starter/compare/v0.1.1...main)
