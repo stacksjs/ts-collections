@@ -2635,15 +2635,11 @@ ${collection.items.map(item =>
         return collect([0] as number[])
       }
 
-      // For the inverse of differentiation, we need to reconstruct
-      // the original sequence from the differences
       const result: number[] = [0]
-      let sum = values[0] // Start with the first value
-      result.push(sum)
+      let sum = 0
 
-      // Each subsequent value is the previous value plus the difference
-      for (let i = 1; i < values.length; i++) {
-        sum += values[i]
+      for (const value of values) {
+        sum += value
         result.push(sum)
       }
 
