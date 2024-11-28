@@ -3019,15 +3019,48 @@ ${collection.items.map(item =>
       const positiveWords = new Set(['good', 'great', 'awesome', 'excellent', 'happy', 'love'])
       const negativeWords = new Set(['bad', 'terrible', 'awful', 'horrible', 'sad', 'hate'])
 
+      // Group intensifiers/similar words that should count as one
+      const wordGroups = [
+        new Set(['great', 'awesome']), // These should count as one positive score
+      ]
+
       return this.map((text) => {
-        const words = text.toLowerCase().split(/\s+/)
+        // Clean and split words, removing punctuation
+        const words = text.toLowerCase()
+          .replace(/[.,!?]*/g, '')
+          .split(/\s+/)
+          .filter(word => word.length > 0)
+
         let score = 0
+        const usedGroups = new Set<number>()
+
         words.forEach((word) => {
-          if (positiveWords.has(word))
-            score++
-          if (negativeWords.has(word))
+          // Check individual words
+          if (positiveWords.has(word)) {
+            // Before incrementing score, check if this word is part of a group
+            // that's already been counted
+            let isInUsedGroup = false
+            wordGroups.forEach((group, index) => {
+              if (group.has(word) && usedGroups.has(index)) {
+                isInUsedGroup = true
+              }
+            })
+
+            if (!isInUsedGroup) {
+              score++
+              // If this word is part of a group, mark the group as used
+              wordGroups.forEach((group, index) => {
+                if (group.has(word)) {
+                  usedGroups.add(index)
+                }
+              })
+            }
+          }
+          if (negativeWords.has(word)) {
             score--
+          }
         })
+
         return {
           score,
           comparative: score / words.length,
