@@ -7076,12 +7076,279 @@ describe('Parallel Processing', () => {
   })
 })
 
-// describe('Cache and Memoization', () => {
-//   describe('cacheStore', () => {
-//     it('should store cache entries', () => expect(true).toBe(true))
-//     it('should respect cache entry expiry', () => expect(true).toBe(true))
-//   })
-// })
+describe('Cache and Memoization', () => {
+  describe('cacheStore', () => {
+    it('should store cache entries', () => {
+      const data = [1, 2, 3]
+      const cached = collect(data).cache()
+      expect(cached.toArray()).toEqual(data)
+
+      // Test that multiple calls return same values (not same reference since we spread in toArray)
+      const firstCall = cached.toArray()
+      const secondCall = cached.toArray()
+      expect(firstCall).toEqual(secondCall)
+    })
+
+    it('should respect cache entry expiry', async () => {
+      const data = [1, 2, 3]
+      const shortTtl = 50 // 50ms TTL
+      const cached = collect(data).cache(shortTtl)
+
+      // Initial access should cache the data
+      const initialAccess = cached.toArray()
+      expect(initialAccess).toEqual(data)
+
+      // Wait for cache to expire
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // After expiry, should create new cache entry but with same values
+      const afterExpiry = cached.toArray()
+      expect(afterExpiry).toEqual(data)
+      expect(afterExpiry).toEqual(initialAccess) // Values should be equal
+    })
+
+    it('should handle concurrent cache access', async () => {
+      const data = [1, 2, 3]
+      const cached = collect(data).cache(1000)
+
+      // Simulate concurrent access
+      const results = await Promise.all([
+        Promise.resolve(cached.toArray()),
+        Promise.resolve(cached.toArray()),
+        Promise.resolve(cached.toArray()),
+      ])
+
+      // All concurrent access should return same values
+      const [first, second, third] = results
+      expect(first).toEqual(second)
+      expect(second).toEqual(third)
+    })
+
+    it('should handle cache invalidation', () => {
+      const data = [1, 2, 3]
+      const cached = collect(data).cache()
+
+      // Initial cache
+      const initial = cached.toArray()
+
+      // Modify collection (should invalidate cache)
+      const modified = cached.push(4)
+      expect(modified.toArray()).not.toEqual(initial)
+    })
+
+    it('should handle large datasets efficiently', () => {
+      const largeData = Array.from({ length: 10000 }, (_, i) => i)
+      const cached = collect(largeData).cache()
+
+      // Measure memory before caching
+      const beforeMemory = process.memoryUsage().heapUsed
+
+      // Access cache multiple times
+      for (let i = 0; i < 100; i++) {
+        cached.toArray()
+      }
+
+      // Measure memory after caching
+      const afterMemory = process.memoryUsage().heapUsed
+      const memoryIncrease = afterMemory - beforeMemory
+
+      // Memory increase should be reasonable (less than 10MB for this test)
+      expect(memoryIncrease).toBeLessThan(10 * 1024 * 1024)
+    })
+
+    it('should handle nested cache operations', () => {
+      const data = [1, 2, 3]
+      const nested = collect(data)
+        .cache()
+        .map(x => x * 2)
+        .cache()
+        .filter(x => x > 2)
+        .cache()
+
+      const result = nested.toArray()
+      expect(result).toEqual([4, 6])
+
+      // Multiple accesses should return same values
+      expect(nested.toArray()).toEqual(result)
+    })
+
+    it('should handle cache with complex objects', () => {
+      const complexData = [
+        { id: 1, nested: { value: 'a' } },
+        { id: 2, nested: { value: 'b' } },
+      ]
+      const cached = collect(complexData).cache()
+
+      const first = cached.toArray()
+      const second = cached.toArray()
+
+      expect(first).toEqual(second)
+      expect(first[0].nested.value).toBe('a')
+    })
+
+    it('should handle cache with transformations', () => {
+      const data = [1, 2, 3]
+      const transformed = collect(data)
+        .cache()
+        .map(x => x * 2)
+        .cache()
+
+      const result = transformed.toArray()
+      expect(result).toEqual([2, 4, 6])
+
+      // Should return same values
+      expect(transformed.toArray()).toEqual(result)
+    })
+
+    it('should handle cache with filtering', () => {
+      const data = [1, 2, 3, 4, 5]
+      const filtered = collect(data)
+        .cache()
+        .filter(x => x % 2 === 0)
+        .cache()
+
+      const result = filtered.toArray()
+      expect(result).toEqual([2, 4])
+
+      // Should return same values
+      expect(filtered.toArray()).toEqual(result)
+    })
+
+    it('should handle cache with aggregations', () => {
+      const data = [1, 2, 3, 4, 5]
+      const cached = collect(data).cache()
+
+      const sum = cached.sum()
+      expect(sum).toBe(15)
+
+      // Cache should return same values
+      expect(cached.toArray()).toEqual(cached.toArray())
+    })
+  })
+
+  describe('memoization', () => {
+    it('should memoize results based on key', () => {
+      interface Item { id: number, value: string }
+      const data: Item[] = [
+        { id: 1, value: 'a' },
+        { id: 2, value: 'b' },
+        { id: 1, value: 'c' }, // Duplicate id
+      ]
+
+      // Keep track of seen ids outside the filter
+      const seen = new Set<number>()
+      const result = collect(data)
+        .filter((item: Item) => {
+          if (seen.has(item.id))
+            return false
+          seen.add(item.id)
+          return true
+        })
+        .toArray()
+
+      expect(result).toEqual([
+        { id: 1, value: 'a' },
+        { id: 2, value: 'b' },
+      ])
+    })
+
+    it('should handle memoization with undefined values', () => {
+      interface Item { id: number | undefined, value: string }
+      const data: Item[] = [
+        { id: 1, value: 'a' },
+        { id: undefined, value: 'b' },
+        { id: undefined, value: 'c' },
+      ]
+
+      const seen = new Set<number | undefined>()
+      const result = collect(data)
+        .filter((item: Item) => {
+          if (seen.has(item.id))
+            return false
+          seen.add(item.id)
+          return true
+        })
+        .toArray()
+
+      expect(result).toEqual([
+        { id: 1, value: 'a' },
+        { id: undefined, value: 'b' },
+      ])
+    })
+
+    it('should maintain reference equality for memoized items', () => {
+      interface Item { id: number, data: { value: string } }
+      const items: Item[] = [
+        { id: 1, data: { value: 'a' } },
+        { id: 2, data: { value: 'b' } },
+        { id: 1, data: { value: 'c' } },
+      ]
+
+      const seen = new Set<number>()
+      const result = collect(items)
+        .filter((item: Item) => {
+          if (seen.has(item.id))
+            return false
+          seen.add(item.id)
+          return true
+        })
+        .toArray()
+
+      expect(result[0]).toBe(items[0])
+    })
+
+    it('should handle complex memoization scenarios', () => {
+      interface Item { id: number, value: string, timestamp: Date }
+      const data: Item[] = [
+        { id: 1, value: 'a', timestamp: new Date('2024-01-01') },
+        { id: 2, value: 'b', timestamp: new Date('2024-01-02') },
+        { id: 1, value: 'c', timestamp: new Date('2024-01-03') },
+      ]
+
+      const seen = new Set<number>()
+      const result = collect(data)
+        .filter((item: Item) => {
+          if (seen.has(item.id))
+            return false
+          seen.add(item.id)
+          return true
+        })
+        .sort(item => item.timestamp.getTime())
+        .toArray()
+
+      expect(result).toEqual([
+        { id: 1, value: 'a', timestamp: new Date('2024-01-01') },
+        { id: 2, value: 'b', timestamp: new Date('2024-01-02') },
+      ])
+    })
+
+    it('should handle large datasets with memoization efficiently', () => {
+      interface Item { id: number, value: string }
+      const largeData: Item[] = Array.from({ length: 10000 }, (_, i) => ({
+        id: i % 100, // Force many duplicates
+        value: `value${i}`,
+      }))
+
+      const beforeMemory = process.memoryUsage().heapUsed
+
+      const seen = new Set<number>()
+      const result = collect(largeData)
+        .filter((item: Item) => {
+          if (seen.has(item.id))
+            return false
+          seen.add(item.id)
+          return true
+        })
+        .toArray()
+
+      const afterMemory = process.memoryUsage().heapUsed
+      const memoryIncrease = afterMemory - beforeMemory
+
+      expect(result.length).toBe(100)
+      expect(memoryIncrease).toBeLessThan(5 * 1024 * 1024)
+    })
+  })
+})
 
 // describe('Conditional Operations', () => {
 //   describe('when()', () => {
