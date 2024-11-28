@@ -1902,23 +1902,34 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       const chunkSize = Math.ceil(collection.length / chunks)
       const batches = this.chunk(chunkSize)
 
+      // Create a semaphore for managing concurrency
+      let runningTasks = 0
+      const queue: Promise<any>[] = []
       const results: U[] = []
-      const runningTasks: Promise<void>[] = []
 
       for (const batch of batches.items) {
-        if (runningTasks.length >= maxConcurrency) {
-          await Promise.race(runningTasks)
+        // Wait if we've hit max concurrency
+        while (runningTasks >= maxConcurrency) {
+          await Promise.race(queue)
         }
 
-        const task = callback(collect(batch)).then((result) => {
-          results.push(result)
-          runningTasks.splice(runningTasks.indexOf(task), 1)
-        })
+        runningTasks++
+        const task = (async () => {
+          try {
+            const result = await callback(collect(batch))
+            results.push(result)
+          }
+          finally {
+            runningTasks--
+            queue.splice(queue.indexOf(task), 1)
+          }
+        })()
 
-        runningTasks.push(task)
+        queue.push(task)
       }
 
-      await Promise.all(runningTasks)
+      // Wait for all tasks to complete
+      await Promise.all(queue)
       return collect(results)
     },
 
@@ -2970,10 +2981,17 @@ ${collection.items.map(item =>
       return collect(items)
     },
 
-    async prefetch(): Promise<CollectionOperations<T>> {
-      // Force evaluation of any lazy operations
-      await Promise.resolve()
-      return this
+    async prefetch(): Promise<CollectionOperations<Awaited<T>>> {
+      const results = await Promise.all(
+        this.items.map(async (item) => {
+          if (item instanceof Promise) {
+            return await item
+          }
+          return await Promise.resolve(item)
+        }),
+      )
+
+      return collect(results) as CollectionOperations<Awaited<T>>
     },
 
     sentiment(this: CollectionOperations<string>): CollectionOperations<{ score: number, comparative: number }> {

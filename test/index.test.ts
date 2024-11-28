@@ -6907,13 +6907,172 @@ describe('Development Tools', () => {
 
 describe('Parallel Processing', () => {
   describe('parallel()', () => {
-    it('should process in parallel', () => expect(true).toBe(true))
-    it('should respect concurrency limits', () => expect(true).toBe(true))
+    it('should process items in parallel', async () => {
+      const items = [1, 2, 3, 4, 5]
+      const delays = [300, 200, 100, 400, 150]
+      const startTime = Date.now()
+
+      const processed = await collect(items).parallel(async (chunk) => {
+        const results = await Promise.all(
+          chunk.items.map(async (item, i) => {
+            await new Promise(resolve => setTimeout(resolve, delays[i]))
+            return item * 2
+          }),
+        )
+        return results[0]
+      })
+
+      const endTime = Date.now()
+      const totalTime = endTime - startTime
+
+      // All items should be processed
+      expect(processed.count()).toBe(items.length)
+
+      // Results should be correct
+      expect(processed.toArray()).toEqual([2, 4, 6, 8, 10])
+
+      // Total time should be less than sequential processing would take
+      const sequentialTime = delays.reduce((a, b) => a + b, 0)
+      expect(totalTime).toBeLessThan(sequentialTime)
+    })
+
+    it('should respect concurrency limits', async () => {
+      const items = [1, 2, 3, 4, 5, 6, 7, 8]
+      const maxConcurrency = 2
+      let currentConcurrent = 0
+      let maxObservedConcurrent = 0
+
+      await collect(items).parallel(
+        async (chunk) => {
+          currentConcurrent++
+          maxObservedConcurrent = Math.max(maxObservedConcurrent, currentConcurrent)
+
+          await new Promise(resolve => setTimeout(resolve, 50))
+
+          currentConcurrent--
+          return chunk.items[0]
+        },
+        { maxConcurrency },
+      )
+
+      expect(maxObservedConcurrent).toBeLessThanOrEqual(maxConcurrency)
+    })
+
+    it('should handle errors gracefully', async () => {
+      const items = [1, 2, 3, 4, 5]
+
+      expect(
+        collect(items).parallel(async () => {
+          throw new Error('Test error')
+        }),
+      ).rejects.toThrow('Test error')
+    })
+
+    it('should process chunks correctly', async () => {
+      const items = [1, 2, 3, 4, 5, 6, 7, 8]
+      const chunkSize = 3
+      const processedChunks: number[][] = []
+
+      await collect(items).parallel(
+        async (chunk) => {
+          processedChunks.push(chunk.toArray())
+          return chunk.items[0]
+        },
+        { chunks: Math.ceil(items.length / chunkSize) },
+      )
+
+      expect(processedChunks).toEqual([
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8],
+      ])
+    })
   })
 
   describe('prefetch()', () => {
-    it('should prefetch results', () => expect(true).toBe(true))
-    it('should cache prefetched data', () => expect(true).toBe(true))
+    it('should prefetch results', async () => {
+      const items = [1, 2, 3]
+      let computeCount = 0
+
+      const collection = collect(items).map((item) => {
+        computeCount++
+        return item * 2
+      })
+
+      // Prefetch results
+      await collection.prefetch()
+
+      // Access results multiple times
+      collection.toArray()
+      collection.toArray()
+      collection.toArray()
+
+      // Computation should only happen once during prefetch
+      expect(computeCount).toBe(items.length)
+    })
+
+    it('should cache prefetched data', async () => {
+      const items = [1, 2, 3]
+      let computeCount = 0
+
+      const collection = await collect(items)
+        .mapAsync(async (item) => {
+          computeCount++
+          await new Promise(resolve => setTimeout(resolve, 10))
+          return item * 2
+        })
+
+      const prefetched = await collection.prefetch()
+
+      // Access results multiple times
+      expect(prefetched.toArray()).toEqual([2, 4, 6])
+      expect(prefetched.toArray()).toEqual([2, 4, 6])
+
+      // Should only compute once
+      expect(computeCount).toBe(items.length)
+    })
+
+    it('should handle async operations in prefetch', async () => {
+      const items = [1, 2, 3]
+      const results: number[] = []
+
+      const collection = await collect(items)
+        .mapAsync(async (item) => {
+          await new Promise(resolve => setTimeout(resolve, 50))
+          results.push(item)
+          return item * 2
+        })
+
+      const prefetched = await collection.prefetch()
+
+      // Results should maintain order
+      expect(results).toEqual([1, 2, 3])
+      expect(prefetched.toArray()).toEqual([2, 4, 6])
+    })
+
+    it('should handle errors during prefetch', async () => {
+      const items = [1, 2, 3]
+
+      const collection = collect(items)
+        .map(() => {
+          // Return a Promise that will reject during prefetch
+          return new Promise((_, reject) => {
+            reject(new Error('Prefetch error'))
+          })
+        })
+
+      expect(collection.prefetch())
+        .rejects
+        .toThrow('Prefetch error')
+    })
+
+    it('should handle empty collections', async () => {
+      const emptyCollection = collect([])
+      const prefetched = await emptyCollection.prefetch()
+
+      expect(prefetched.count()).toBe(0)
+      expect(prefetched.toArray()).toEqual([])
+    })
   })
 })
 

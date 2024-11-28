@@ -447,7 +447,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   // Caching & Performance
   cache: (ttl?: number) => CollectionOperations<T>
   memoize: <K extends keyof T>(key: K) => CollectionOperations<T>
-  prefetch: () => Promise<CollectionOperations<T>>
+  prefetch: () => Promise<CollectionOperations<Awaited<T>>>
   lazy: () => LazyCollectionOperations<T>
 
   // Advanced Math & Statistics
