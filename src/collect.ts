@@ -1293,7 +1293,18 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
     },
 
     forPage(page: number, perPage: number): CollectionOperations<T> {
+      // Validate inputs
+      if (page < 1 || perPage <= 0) {
+        return collect([] as T[])
+      }
+
       const offset = (page - 1) * perPage
+
+      // Check if offset is outside the collection bounds
+      if (offset >= collection.items.length) {
+        return collect([] as T[])
+      }
+
       return collect(collection.items.slice(offset, offset + perPage))
     },
 

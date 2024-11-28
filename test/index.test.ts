@@ -7519,17 +7519,169 @@ describe('Conditional Operations', () => {
   })
 })
 
-// describe('Navigation and Paging', () => {
-//   describe('forPage()', () => {
-//     it('should return specific page', () => expect(true).toBe(true))
-//     it('should handle out of bounds pages', () => expect(true).toBe(true))
-//   })
+describe('Navigation and Paging', () => {
+  describe('forPage()', () => {
+    it('should return specific page', () => expect(true).toBe(true))
+    // Test data
+    const items = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
+    const collection = collect(items)
 
-//   describe('cursor()', () => {
-//     it('should create async iterator', () => expect(true).toBe(true))
-//     it('should respect chunk size', () => expect(true).toBe(true))
-//   })
-// })
+    it('should return specific page', () => {
+      // Test first page
+      const firstPage = collection.forPage(1, 10)
+      expect(firstPage.count()).toBe(10)
+      expect(firstPage.first()?.id).toBe(1)
+      expect(firstPage.last()?.id).toBe(10)
+
+      // Test middle page
+      const middlePage = collection.forPage(5, 10)
+      expect(middlePage.count()).toBe(10)
+      expect(middlePage.first()?.id).toBe(41)
+      expect(middlePage.last()?.id).toBe(50)
+
+      // Test last page
+      const lastPage = collection.forPage(10, 10)
+      expect(lastPage.count()).toBe(10)
+      expect(lastPage.first()?.id).toBe(91)
+      expect(lastPage.last()?.id).toBe(100)
+
+      // Test with different page size
+      const largePage = collection.forPage(2, 20)
+      expect(largePage.count()).toBe(20)
+      expect(largePage.first()?.id).toBe(21)
+      expect(largePage.last()?.id).toBe(40)
+    })
+
+    it('should handle out of bounds pages', () => {
+      const items = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
+      const collection = collect(items)
+
+      // Test page number below 1
+      const negativePage = collection.forPage(-1, 10)
+      expect(negativePage.count()).toBe(0)
+      expect(negativePage.isEmpty()).toBe(true)
+
+      // Test page number of 0
+      const zeroPage = collection.forPage(0, 10)
+      expect(zeroPage.count()).toBe(0)
+      expect(zeroPage.isEmpty()).toBe(true)
+
+      // Test page beyond total pages (page 11 with 10 items per page for 100 items)
+      const beyondLastPage = collection.forPage(11, 10)
+      expect(beyondLastPage.count()).toBe(0)
+      expect(beyondLastPage.isEmpty()).toBe(true)
+
+      // Test with invalid page size
+      const invalidPageSize = collection.forPage(1, -5)
+      expect(invalidPageSize.count()).toBe(0)
+      expect(invalidPageSize.isEmpty()).toBe(true)
+
+      // Test with zero page size
+      const zeroPageSize = collection.forPage(1, 0)
+      expect(zeroPageSize.count()).toBe(0)
+      expect(zeroPageSize.isEmpty()).toBe(true)
+
+      // Test edge case: last valid page
+      const lastValidPage = collection.forPage(10, 10)
+      expect(lastValidPage.count()).toBe(10)
+      expect(lastValidPage.isEmpty()).toBe(false)
+
+      // Test edge case: first page after valid pages
+      const firstInvalidPage = collection.forPage(11, 10)
+      expect(firstInvalidPage.count()).toBe(0)
+      expect(firstInvalidPage.isEmpty()).toBe(true)
+    })
+  })
+
+  describe('cursor()', () => {
+    it('should create async iterator', async () => {
+      const items = Array.from({ length: 10 }, (_, i) => ({ id: i + 1 }))
+      const collection = collect(items)
+      const cursor = collection.cursor(3)
+
+      // Test cursor is an async iterator
+      expect(cursor[Symbol.asyncIterator]).toBeDefined()
+
+      // Collect all chunks
+      const chunks: Array<{ id: number }[]> = []
+      for await (const chunk of cursor) {
+        chunks.push(chunk.toArray())
+      }
+
+      // Verify chunks
+      expect(chunks.length).toBe(4) // 3 + 3 + 3 + 1 = 10 items
+      expect(chunks[0].length).toBe(3)
+      expect(chunks[1].length).toBe(3)
+      expect(chunks[2].length).toBe(3)
+      expect(chunks[3].length).toBe(1)
+
+      // Verify chunk contents
+      expect(chunks[0].map(item => item.id)).toEqual([1, 2, 3])
+      expect(chunks[1].map(item => item.id)).toEqual([4, 5, 6])
+      expect(chunks[2].map(item => item.id)).toEqual([7, 8, 9])
+      expect(chunks[3].map(item => item.id)).toEqual([10])
+    })
+
+    it('should respect chunk size', async () => {
+      const items = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
+      const collection = collect(items)
+
+      // Test with different chunk sizes
+      const testSizes = [1, 10, 25, 50, 100]
+
+      for (const size of testSizes) {
+        const cursor = collection.cursor(size)
+        const chunks: Array<{ id: number }[]> = []
+
+        for await (const chunk of cursor) {
+          chunks.push(chunk.toArray())
+          // Verify each chunk doesn't exceed the specified size
+          expect(chunk.count()).toBeLessThanOrEqual(size)
+        }
+
+        // Verify total items
+        const totalItems = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+        expect(totalItems).toBe(100)
+
+        // Verify all chunks except possibly the last one are full size
+        chunks.slice(0, -1).forEach((chunk) => {
+          expect(chunk.length).toBe(size)
+        })
+
+        // Verify the last chunk size
+        const lastChunkSize = 100 % size || size
+        expect(chunks[chunks.length - 1].length).toBe(lastChunkSize)
+      }
+    })
+
+    it('should handle empty collections', async () => {
+      const emptyCollection = collect([])
+      const cursor = emptyCollection.cursor(10)
+      const chunks: any[] = []
+
+      for await (const chunk of cursor) {
+        chunks.push(chunk.toArray())
+      }
+
+      expect(chunks.length).toBe(0)
+    })
+
+    it('should handle chunk size larger than collection', async () => {
+      const items = Array.from({ length: 5 }, (_, i) => ({ id: i + 1 }))
+      const collection = collect(items)
+      const cursor = collection.cursor(10)
+      const chunks: Array<{ id: number }[]> = []
+
+      for await (const chunk of cursor) {
+        chunks.push(chunk.toArray())
+      }
+
+      expect(chunks.length).toBe(1)
+      expect(chunks[0].length).toBe(5)
+      expect(chunks[0].map(item => item.id)).toEqual([1, 2, 3, 4, 5])
+    })
+  })
+})
 
 // describe('Fuzzy Matching', () => {
 //   describe('calculateFuzzyScore()', () => {
