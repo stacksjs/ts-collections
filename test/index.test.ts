@@ -8400,10 +8400,11 @@ describe('Collection Core', () => {
     it('should create new collection operations', () => {
       // Test various input types
       const numberArray = collect([1, 2, 3])
-      const stringArray = collect(['a', 'b', 'c'])
-      const objectArray = collect([{ id: 1 }, { id: 2 }])
-      const emptyArray = collect([])
-      const iterableSet = collect(new Set([1, 2, 3]))
+      // Ensure no errors are thrown
+      collect(['a', 'b', 'c'])
+      collect([{ id: 1 }, { id: 2 }])
+      collect([])
+      collect(new Set([1, 2, 3]))
 
       // Verify collection operations are present
       expect(numberArray.map).toBeDefined()
