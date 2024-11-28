@@ -346,8 +346,15 @@ export interface CollectionOperations<T> extends Collection<T> {
   whereBetween: <K extends keyof T>(key: K, min: T[K], max: T[K]) => CollectionOperations<T>
   whereNotBetween: <K extends keyof T>(key: K, min: T[K], max: T[K]) => CollectionOperations<T>
   unique: <K extends keyof T>(key?: K) => CollectionOperations<T>
-  when: (condition: boolean | ConditionalCallback<T>, callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
-  unless: (condition: boolean | ConditionalCallback<T>, callback: (collection: CollectionOperations<T>) => CollectionOperations<T>) => CollectionOperations<T>
+  when: <U = T>(
+    condition: boolean | ConditionalCallback<T>,
+    callback: (collection: CollectionOperations<T>) => CollectionOperations<U>
+  ) => CollectionOperations<U>
+
+  unless: <U = T>(
+    condition: boolean | ConditionalCallback<T>,
+    callback: (collection: CollectionOperations<T>) => CollectionOperations<U>
+  ) => CollectionOperations<U>
 
   // Advanced Filtering
   whereNull: <K extends keyof T>(key: K) => CollectionOperations<T>

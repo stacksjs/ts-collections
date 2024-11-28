@@ -871,20 +871,20 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       )
     },
 
-    when(
+    when<U = T>(
       condition: boolean | ConditionalCallback<T>,
-      callback: (collection: CollectionOperations<T>) => CollectionOperations<T>,
-    ): CollectionOperations<T> {
+      callback: (collection: CollectionOperations<T>) => CollectionOperations<U>,
+    ): CollectionOperations<U> {
       const shouldRun = typeof condition === 'function' ? condition(this) : condition
-      return shouldRun ? callback(this) : this
+      return shouldRun ? callback(this) : this as unknown as CollectionOperations<U>
     },
 
-    unless(
+    unless<U = T>(
       condition: boolean | ConditionalCallback<T>,
-      callback: (collection: CollectionOperations<T>) => CollectionOperations<T>,
-    ): CollectionOperations<T> {
+      callback: (collection: CollectionOperations<T>) => CollectionOperations<U>,
+    ): CollectionOperations<U> {
       const shouldRun = typeof condition === 'function' ? condition(this) : condition
-      return shouldRun ? this : callback(this)
+      return shouldRun ? this as unknown as CollectionOperations<U> : callback(this)
     },
 
     sort(compareFunction?: CompareFunction<T>): CollectionOperations<T> {
@@ -2663,7 +2663,7 @@ ${collection.items.map(item =>
     geoDistance<K extends keyof T>(
       key: K,
       point: readonly [number, number],
-      unit: 'km' | 'mi' = 'km'
+      unit: 'km' | 'mi' = 'km',
     ): CollectionOperations<T & { distance: number }> {
       function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
         // Validate coordinates
