@@ -1316,22 +1316,22 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       }
     },
 
-    symmetricDiff(other: T[] | CollectionOperations<T>): CollectionOperations<T> {
+    symmetricDiff<U = T>(other: U[] | CollectionOperations<U>): CollectionOperations<T | U> {
       const otherItems = Array.isArray(other) ? other : other.items
       const otherSet = new Set(otherItems)
       const thisSet = new Set(collection.items)
-      const result = new Set<T>()
+      const result = new Set<T | U>()
 
       // Add items that are in this collection but not in other
       collection.items.forEach((item) => {
-        if (!otherSet.has(item)) {
+        if (!otherSet.has(item as unknown as U)) {
           result.add(item)
         }
       })
 
       // Add items that are in other but not in this collection
       otherItems.forEach((item) => {
-        if (!thisSet.has(item)) {
+        if (!thisSet.has(item as unknown as T)) {
           result.add(item)
         }
       })
