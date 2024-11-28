@@ -1920,11 +1920,16 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       for (const batch of batches.items) {
         // Wait if we've hit max concurrency
+        // eslint-disable-next-line no-unmodified-loop-condition
         while (runningTasks >= maxConcurrency) {
           await Promise.race(queue)
         }
 
         runningTasks++
+
+        // Create a reference to store the promise
+        let removeTask: (() => void) | undefined
+
         const task = (async () => {
           try {
             const result = await callback(collect(batch))
@@ -1932,9 +1937,17 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           }
           finally {
             runningTasks--
-            queue.splice(queue.indexOf(task), 1)
+            removeTask?.()
           }
         })()
+
+        // Set up the removal function after promise is created
+        removeTask = () => {
+          const index = queue.indexOf(task)
+          if (index > -1) {
+            queue.splice(index, 1)
+          }
+        }
 
         queue.push(task)
       }
