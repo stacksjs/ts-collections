@@ -7683,17 +7683,176 @@ describe('Navigation and Paging', () => {
   })
 })
 
-// describe('Fuzzy Matching', () => {
-//   describe('calculateFuzzyScore()', () => {
-//     it('should calculate similarity score', () => expect(true).toBe(true))
-//     it('should handle empty strings', () => expect(true).toBe(true))
-//   })
+describe('Fuzzy Matching', () => {
+  describe('fuzzyMatch()', () => {
+    const testData = [
+      { id: 1, name: 'John Smith' },
+      { id: 2, name: 'Jane Doe' },
+      { id: 3, name: 'Bob Wilson' },
+      { id: 4, name: 'Sarah Johnson' },
+      { id: 5, name: 'Mike Thompson' },
+      { id: 6, name: 'Jennifer Wilson' },
+    ]
 
-//   describe('levenshteinDistance()', () => {
-//     it('should calculate edit distance', () => expect(true).toBe(true))
-//     it('should handle empty strings', () => expect(true).toBe(true))
-//   })
-// })
+    it('should match exact strings', () => {
+      const collection = collect(testData)
+      const matches = collection.fuzzyMatch('name', 'John Smith', 0.8)
+
+      expect(matches.count()).toBe(1)
+      expect(matches.first()?.id).toBe(1)
+    })
+
+    it('should match partial strings', () => {
+      const collection = collect(testData)
+
+      // Test partial name matching with lower threshold
+      const johnMatches = collection.fuzzyMatch('name', 'John', 0.4)
+      expect(johnMatches.count()).toBeGreaterThan(0)
+      expect(johnMatches.toArray().some(item => item.name.includes('John'))).toBe(true)
+
+      // Test matching multiple results with lower threshold
+      const wilsonMatches = collection.fuzzyMatch('name', 'Wilson', 0.4)
+      expect(wilsonMatches.count()).toBeGreaterThan(0)
+      expect(wilsonMatches.toArray().some(item => item.name.includes('Wilson'))).toBe(true)
+    })
+
+    it('should handle case-insensitive matching', () => {
+      const collection = collect(testData)
+
+      // Test lowercase query with appropriate threshold
+      const lowerMatches = collection.fuzzyMatch('name', 'john smith', 0.4)
+      expect(lowerMatches.count()).toBeGreaterThan(0)
+      expect(lowerMatches.toArray().some(item =>
+        item.name.toLowerCase().includes('john'))).toBe(true)
+
+      // Test mixed case query
+      const mixedMatches = collection.fuzzyMatch('name', 'JoHn sMiTh', 0.4)
+      expect(mixedMatches.count()).toBeGreaterThan(0)
+      expect(mixedMatches.toArray().some(item =>
+        item.name.toLowerCase().includes('john'))).toBe(true)
+    })
+
+    it('should handle empty strings', () => {
+      const collection = collect(testData)
+
+      // Empty search query
+      const emptyQuery = collection.fuzzyMatch('name', '')
+      expect(emptyQuery.isEmpty()).toBe(true)
+
+      // Data with empty strings
+      const dataWithEmpty = [...testData, { id: 7, name: '' }]
+      const collectionWithEmpty = collect(dataWithEmpty)
+      const matches = collectionWithEmpty.fuzzyMatch('name', 'John', 0.4)
+      expect(matches.count()).toBeGreaterThan(0)
+      expect(matches.toArray().some(item => item.name.includes('John'))).toBe(true)
+    })
+
+    it('should respect threshold parameter', () => {
+      const collection = collect(testData)
+
+      // Test with high threshold (stricter matching)
+      const highThreshold = collection.fuzzyMatch('name', 'Jon', 0.9)
+      expect(highThreshold.isEmpty()).toBe(true)
+
+      // Test with low threshold (more lenient matching)
+      const lowThreshold = collection.fuzzyMatch('name', 'Jon', 0.3)
+      expect(lowThreshold.count()).toBeGreaterThan(0)
+
+      // Test with zero threshold (should match everything)
+      const zeroThreshold = collection.fuzzyMatch('name', 'x', 0)
+      expect(zeroThreshold.count()).toBe(testData.length)
+
+      // Test with threshold of 1 (exact matches only)
+      const exactThreshold = collection.fuzzyMatch('name', 'John Smith', 1)
+      expect(exactThreshold.count()).toBeLessThanOrEqual(1)
+    })
+
+    it('should handle special characters', () => {
+      const specialData = [
+        { id: 1, name: 'John-Smith' },
+        { id: 2, name: 'John.Smith' },
+        { id: 3, name: 'John_Smith' },
+        { id: 4, name: 'John & Smith' },
+      ]
+      const collection = collect(specialData)
+
+      // Test matching with special characters using appropriate threshold
+      const matches = collection.fuzzyMatch('name', 'John Smith', 0.4)
+      expect(matches.count()).toBeGreaterThan(0)
+
+      // Test matching with exact special characters
+      const exactMatches = collection.fuzzyMatch('name', 'John-Smith', 0.8)
+      expect(exactMatches.toArray().some(item => item.name.includes('-'))).toBe(true)
+    })
+
+    it('should handle non-string values', () => {
+      const mixedData = [
+        { id: 1, value: 123 },
+        { id: 2, value: true },
+        { id: 3, value: null },
+        { id: 4, value: undefined },
+        { id: 5, value: { nested: 'value' } },
+      ]
+      const collection = collect(mixedData)
+
+      // Should convert numbers to strings for matching
+      const numberMatch = collection.fuzzyMatch('value', '123', 0.8)
+      expect(numberMatch.count()).toBeGreaterThan(0)
+      expect(numberMatch.first()?.id).toBe(1)
+
+      // Should handle boolean values
+      const boolMatch = collection.fuzzyMatch('value', 'true', 0.8)
+      expect(boolMatch.count()).toBeGreaterThan(0)
+      expect(boolMatch.first()?.id).toBe(2)
+    })
+
+    it('should handle accented characters', () => {
+      const accentedData = [
+        { id: 1, name: 'José' },
+        { id: 2, name: 'André' },
+        { id: 3, name: 'François' },
+      ]
+      const collection = collect(accentedData)
+
+      // Test matching with accents using appropriate threshold
+      const matches = collection.fuzzyMatch('name', 'Jose', 0.4)
+      expect(matches.count()).toBeGreaterThan(0)
+      expect(matches.toArray().some(item => item.name.includes('José'))).toBe(true)
+    })
+
+    it('should handle very long strings', () => {
+      const longString = 'a'.repeat(1000)
+      const longData = [
+        { id: 1, text: longString },
+        { id: 2, text: `${longString}b` },
+      ]
+      const collection = collect(longData)
+
+      // Test matching long strings with appropriate threshold
+      const matches = collection.fuzzyMatch('text', longString, 0.9)
+      expect(matches.count()).toBeGreaterThan(0)
+      expect(matches.toArray().some(item => item.text.startsWith(longString))).toBe(true)
+    })
+  })
+
+  describe('Performance', () => {
+    it('should handle large datasets efficiently', () => {
+      const largeData = Array.from({ length: 1000 }, (_, i) => ({
+        id: i + 1,
+        name: `Person ${i + 1}`,
+      }))
+      const collection = collect(largeData)
+
+      const start = performance.now()
+      const matches = collection.fuzzyMatch('name', 'Person 500', 0.7)
+      const end = performance.now()
+
+      expect(matches.count()).toBeGreaterThan(0)
+      const executionTime = end - start
+      expect(executionTime).toBeLessThan(100)
+    })
+  })
+})
 
 // describe('Machine Learning Utilities', () => {
 //   describe('randomSplit()', () => {
