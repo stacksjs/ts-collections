@@ -600,7 +600,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   fft: (this: CollectionOperations<T>) => T extends number ? CollectionOperations<[number, number]> : never
   interpolate: (this: CollectionOperations<number>, points: number) => CollectionOperations<number>
   convolve: (this: CollectionOperations<number>, kernel: number[]) => CollectionOperations<number>
-  differentiate: (this: CollectionOperations<number>) => CollectionOperations<number>
+  differentiate: (this: CollectionOperations<T>) => CollectionOperations<number>
   integrate: (this: CollectionOperations<number>) => CollectionOperations<number>
 
   // Specialized Data Types Support

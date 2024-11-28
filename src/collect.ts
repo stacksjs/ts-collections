@@ -2632,13 +2632,13 @@ ${collection.items.map(item =>
       return collect(result)
     },
 
-    differentiate(this: CollectionOperations<number>): CollectionOperations<number> {
+    differentiate(this: CollectionOperations<T>): CollectionOperations<number> {
       if (this.count() <= 1)
         return collect([] as number[])
 
       const values = this.toArray()
       return collect(
-        values.slice(1).map((v, i) => v - values[i]),
+        values.slice(1).map((v, i) => Number(v) - Number(values[i])),
       )
     },
 
