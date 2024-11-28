@@ -5888,13 +5888,13 @@ describe('Database-like Operations', () => {
 
   describe('crossJoin()', () => {
     const products = [
-      { id: 1, name: 'Product A' },
-      { id: 2, name: 'Product B' },
+      { product_id: 1, product_name: 'Product A' },
+      { product_id: 2, product_name: 'Product B' },
     ]
 
     const categories = [
-      { id: 1, name: 'Category X' },
-      { id: 2, name: 'Category Y' },
+      { category_id: 1, category_name: 'Category X' },
+      { category_id: 2, category_name: 'Category Y' },
     ]
 
     it('should perform cross join', () => {
@@ -5903,10 +5903,10 @@ describe('Database-like Operations', () => {
 
       expect(result.count()).toBe(4)
       expect(result.first()).toEqual(expect.objectContaining({
-        id: 1,
-        name: 'Product A',
-        id: 1,
-        name: 'Category X',
+        product_id: 1,
+        product_name: 'Product A',
+        category_id: 1,
+        category_name: 'Category X',
       }))
     })
 
@@ -6097,7 +6097,7 @@ describe('Export Operations', () => {
       const elastic = collection.toElastic('users')
 
       expect(elastic.body.length).toBe(data.length * 2)
-      expect(elastic.body.filter(item =>
+      expect(elastic.body.filter((item: any) =>
         typeof item === 'object' && item !== null && 'index' in item,
       )).toHaveLength(data.length)
     })
