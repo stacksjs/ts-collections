@@ -8395,11 +8395,162 @@ describe('Geographic Calculations', () => {
   })
 })
 
-// describe('Collection Core', () => {
-//   describe('createCollectionOperations()', () => {
-//     it('should create new collection operations', () => expect(true).toBe(true))
-//     it('should initialize with correct state', () => expect(true).toBe(true))
-//     it('should maintain type safety', () => expect(true).toBe(true))
-//   })
-// })
-//
+describe('Collection Core', () => {
+  describe('createCollectionOperations()', () => {
+    it('should create new collection operations', () => {
+      // Test various input types
+      const numberArray = collect([1, 2, 3])
+      const stringArray = collect(['a', 'b', 'c'])
+      const objectArray = collect([{ id: 1 }, { id: 2 }])
+      const emptyArray = collect([])
+      const iterableSet = collect(new Set([1, 2, 3]))
+
+      // Verify collection operations are present
+      expect(numberArray.map).toBeDefined()
+      expect(numberArray.filter).toBeDefined()
+      expect(numberArray.reduce).toBeDefined()
+
+      // Test chaining
+      const result = numberArray
+        .map(n => n * 2)
+        .filter(n => n > 2)
+        .toArray()
+
+      expect(result).toEqual([4, 6])
+
+      // Verify immutability
+      const original = [1, 2, 3]
+      const collection = collect(original)
+      collection.map(n => n * 2)
+      expect(original).toEqual([1, 2, 3])
+    })
+
+    it('should initialize with correct state', () => {
+      const items = [1, 2, 3]
+      const collection = collect(items)
+
+      // Test initial state
+      expect(collection.count()).toBe(3)
+      expect(collection.isEmpty()).toBe(false)
+      expect(collection.toArray()).toEqual(items)
+
+      // Test empty collection
+      const emptyCollection = collect([])
+      expect(emptyCollection.count()).toBe(0)
+      expect(emptyCollection.isEmpty()).toBe(true)
+      expect(emptyCollection.toArray()).toEqual([])
+
+      // Test state after operations
+      const mappedCollection = collection.map(x => x * 2)
+      expect(mappedCollection.count()).toBe(3)
+      expect(mappedCollection.toArray()).toEqual([2, 4, 6])
+      expect(collection.toArray()).toEqual([1, 2, 3]) // Original unchanged
+
+      // Test complex state
+      const mixed = collect([
+        { id: 1, value: 'a' },
+        { id: 2, value: 'b' },
+      ])
+      expect(mixed.count()).toBe(2)
+      expect(mixed.pluck('id').toArray()).toEqual([1, 2])
+    })
+
+    it('should maintain type safety', () => {
+      interface User {
+        id: number
+        name: string
+        age?: number
+      }
+
+      // Create strongly typed collection
+      const users: User[] = [
+        { id: 1, name: 'Alice', age: 30 },
+        { id: 2, name: 'Bob' },
+        { id: 3, name: 'Charlie', age: 25 },
+      ]
+
+      const collection = collect(users)
+
+      // Test type-safe operations
+      const names = collection.pluck('name').toArray()
+      expect(names).toEqual(['Alice', 'Bob', 'Charlie'])
+
+      // Test optional properties
+      const ages = collection
+        .filter(user => user.age !== undefined)
+        .pluck('age')
+        .toArray()
+      expect(ages).toEqual([30, 25])
+
+      // Test type inference in transformations
+      const userDetails = collection
+        .map(user => ({
+          fullInfo: `${user.name} (${user.age ?? 'N/A'})`,
+          hasAge: user.age !== undefined,
+        }))
+        .toArray()
+
+      expect(userDetails[0]).toEqual({
+        fullInfo: 'Alice (30)',
+        hasAge: true,
+      })
+      expect(userDetails[1]).toEqual({
+        fullInfo: 'Bob (N/A)',
+        hasAge: false,
+      })
+
+      // Test type safety with generic operations
+      interface WithId {
+        id: number
+      }
+
+      function processItems<T extends WithId>(items: T[]): T[] {
+        return collect(items)
+          .sortBy('id')
+          .toArray()
+      }
+
+      const sortedUsers = processItems(users)
+      expect(sortedUsers[0].id).toBe(1)
+      expect(sortedUsers[1].id).toBe(2)
+
+      // Test union types
+      type Status = 'active' | 'inactive'
+      interface UserWithStatus extends User {
+        status: Status
+      }
+
+      const usersWithStatus: UserWithStatus[] = users.map(user => ({
+        ...user,
+        status: user.age && user.age < 30 ? 'active' : 'inactive',
+      }))
+
+      const collection2 = collect(usersWithStatus)
+      const activeUsers = collection2
+        .where('status', 'active')
+        .toArray()
+
+      expect(activeUsers.length).toBe(1)
+      expect(activeUsers[0].name).toBe('Charlie')
+
+      // Test nested type safety
+      interface Department {
+        id: number
+        employees: User[]
+      }
+
+      const departments: Department[] = [
+        { id: 1, employees: users.slice(0, 2) },
+        { id: 2, employees: users.slice(2) },
+      ]
+
+      const deptCollection = collect(departments)
+      const allEmployees = deptCollection
+        .flatMap(dept => dept.employees)
+        .toArray()
+
+      expect(allEmployees.length).toBe(3)
+      expect(allEmployees[0].name).toBe('Alice')
+    })
+  })
+})
