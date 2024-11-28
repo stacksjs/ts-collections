@@ -2660,7 +2660,11 @@ ${collection.items.map(item =>
     },
 
     // Specialized data types support
-    geoDistance<K extends keyof T>(key: K, point: [number, number], unit: 'km' | 'mi' = 'km'): CollectionOperations<T & { distance: number }> {
+    geoDistance<K extends keyof T>(
+      key: K,
+      point: readonly [number, number],
+      unit: 'km' | 'mi' = 'km'
+    ): CollectionOperations<T & { distance: number }> {
       function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
         // Validate coordinates
         if (!validateCoordinates(lat1, lon1) || !validateCoordinates(lat2, lon2)) {

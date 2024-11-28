@@ -5733,7 +5733,7 @@ describe('Specialized Data Types', () => {
 
     it('should calculate distances in km', () => {
       const collection = collect(locations)
-      const point = [40.7128, -74.0060] // New York coordinates
+      const point = [40.7128, -74.0060] as const // New York coordinates
       const result = collection.geoDistance('coords', point, 'km')
 
       const distances = result.pluck('distance').toArray()
@@ -5750,7 +5750,7 @@ describe('Specialized Data Types', () => {
 
     it('should calculate distances in miles', () => {
       const collection = collect(locations)
-      const point = [40.7128, -74.0060] // New York coordinates
+      const point = [40.7128, -74.0060] as const // New York coordinates
       const result = collection.geoDistance('coords', point, 'mi')
 
       const distances = result.pluck('distance').toArray()

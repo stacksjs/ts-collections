@@ -606,7 +606,7 @@ export interface CollectionOperations<T> extends Collection<T> {
   // Specialized Data Types Support
   geoDistance: <K extends keyof T>(
     key: K,
-    point: [number, number],
+    point: readonly [number, number],
     unit?: 'km' | 'mi'
   ) => CollectionOperations<T & { distance: number }>
   money: <K extends keyof T>(
