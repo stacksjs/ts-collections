@@ -1913,14 +1913,19 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       // Calculate chunk size and create batches
       const itemsPerChunk = Math.ceil(collection.length / chunks)
-      const batches = this.chunk(itemsPerChunk).toArray()
+      const batches = this.chunk(itemsPerChunk)
 
       // Create a semaphore for managing concurrency
       let runningTasks = 0
       const queue: Promise<any>[] = []
       const results: U[] = []
 
-      for (const batch of batches) {
+      // Process all batches
+      for (let i = 0; i < batches.count(); i++) {
+        const batch = batches.nth(i)
+        if (!batch)
+          continue
+
         // Wait if we've hit max concurrency
         // eslint-disable-next-line no-unmodified-loop-condition
         while (runningTasks >= maxConcurrency) {
@@ -1934,7 +1939,16 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
         const task = (async () => {
           try {
             const result = await callback(collect(batch))
-            results.push(result)
+            // If result is an array-like structure, spread it into results
+            if (Array.isArray(result)) {
+              results.push(...(result as any))
+            }
+            else if (result && typeof (result as any).toArray === 'function') {
+              results.push(...(result as any).toArray())
+            }
+            else {
+              results.push(result)
+            }
           }
           finally {
             runningTasks--
@@ -1956,7 +1970,6 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       // Wait for all tasks to complete
       await Promise.all(queue)
 
-      // Return results without flattening to maintain original types
       return collect(results)
     },
 
