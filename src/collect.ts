@@ -3234,12 +3234,23 @@ ${collection.items.map(item =>
       // Calculate Euclidean distance
       function distance(a: T, b: { [P in K]?: T[P] }): number {
         return Math.sqrt(
-          features.reduce((sum, feature) => {
-            if (feature in b) {
-              const diff = Number(a[feature]) - Number(b[feature])
-              return sum + diff * diff
-            }
-            return sum
+          Array.from(features).reduce<number>((sum, feature) => {
+            const bValue = b[feature]
+            const aValue = a[feature]
+
+            // Skip if value is undefined
+            if (bValue === undefined)
+              return sum
+
+            // Convert to numbers and check validity
+            const aNum = Number(aValue)
+            const bNum = Number(bValue)
+            if (Number.isNaN(aNum) || Number.isNaN(bNum))
+              return sum
+
+            // Calculate squared difference
+            const diff = aNum - bNum
+            return sum + (diff * diff)
           }, 0),
         )
       }
