@@ -1594,7 +1594,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
     stream(): ReadableStream<T> {
       let index = 0
-      return new ReadableStream({
+      return new ReadableStream<T>({
         pull: (controller) => {
           if (index < collection.length) {
             controller.enqueue(collection.items[index++])
@@ -1606,8 +1606,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       })
     },
 
-    async fromStream(stream: ReadableStream<T>): Promise<CollectionOperations<T>> {
-      const items: T[] = []
+    async fromStream<U>(stream: ReadableStream<U>): Promise<CollectionOperations<U>> {
+      const items: U[] = []
       const reader = stream.getReader()
 
       try {

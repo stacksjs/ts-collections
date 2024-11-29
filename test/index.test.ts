@@ -6204,25 +6204,25 @@ describe('Streaming Operations', () => {
   describe('fromStream()', () => {
     it('should collect from stream', async () => {
       const data = [1, 2, 3, 4, 5]
-      const stream = new ReadableStream({
+      const stream = new ReadableStream<number>({
         start(controller) {
           data.forEach(item => controller.enqueue(item))
           controller.close()
         },
       })
 
-      const result = await collect([]).fromStream(stream)
+      const result = await collect<number>([]).fromStream(stream)
       expect(result.toArray()).toEqual(data)
     })
 
     it('should handle stream errors', async () => {
-      const errorStream = new ReadableStream({
+      const errorStream = new ReadableStream<number>({
         start(controller) {
           controller.error(new Error('Stream error'))
         },
       })
 
-      expect(collect([]).fromStream(errorStream))
+      expect(collect<number>([]).fromStream(errorStream))
         .rejects
         .toThrow('Stream error')
     })
