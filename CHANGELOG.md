@@ -1,6 +1,24 @@
 # Changelog
 
 
+## v0.3.0...main
+
+[compare changes](https://github.com/stacksjs/ts-starter/compare/v0.3.0...main)
+
+### 🏡 Chore
+
+- Stream type improvements ([a718c80](https://github.com/stacksjs/ts-starter/commit/a718c80))
+- Resolve knn type issues ([3a7a6ac](https://github.com/stacksjs/ts-starter/commit/3a7a6ac))
+- Test ci failure ([1345319](https://github.com/stacksjs/ts-starter/commit/1345319))
+- Improve knn ([cfa3958](https://github.com/stacksjs/ts-starter/commit/cfa3958))
+- Test ci failure ([ce05ca4](https://github.com/stacksjs/ts-starter/commit/ce05ca4))
+- Test ci again ([cb0379d](https://github.com/stacksjs/ts-starter/commit/cb0379d))
+- Update deps ([ab36fc9](https://github.com/stacksjs/ts-starter/commit/ab36fc9))
+
+### ❤️ Contributors
+
+- Chris ([@chrisbbreuer](http://github.com/chrisbbreuer))
+
 ## v0.2.0...main
 
 [compare changes](https://github.com/stacksjs/ts-starter/compare/v0.2.0...main)
