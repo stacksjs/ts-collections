@@ -513,9 +513,9 @@ export interface CollectionOperations<T> extends Collection<T> {
     independents: K[]
   ) => RegressionResult
   knn: <K extends keyof T>(
-    point: Pick<T, K>,
+    point: { [P in K]?: T[P] },
     k: number,
-    features: K[]
+    features: ReadonlyArray<K> | K[]
   ) => CollectionOperations<T>
   naiveBayes: <K extends keyof T>(
     features: K[],

@@ -7946,8 +7946,16 @@ describe('Machine Learning Utilities', () => {
     })
   })
 
-  describe('distance()', () => {
-    const points = [
+  describe('knn()', () => {
+    interface Point {
+      id: number
+      x: number
+      y: number
+      z: number
+      category: string
+    }
+
+    const points: Point[] = [
       { id: 1, x: 1, y: 1, z: 1, category: 'A' },
       { id: 2, x: 2, y: 2, z: 2, category: 'A' },
       { id: 3, x: 10, y: 10, z: 10, category: 'B' },
@@ -7957,7 +7965,7 @@ describe('Machine Learning Utilities', () => {
     it('should calculate distance for KNN', () => {
       const collection = collect(points)
       const k = 2
-      const features = ['x', 'y', 'z']
+      const features = ['x', 'y', 'z'] as const satisfies readonly (keyof Point)[]
 
       const testPoint = { x: 1.5, y: 1.5, z: 1.5 }
       const neighbors = collection.knn(testPoint, k, features)
@@ -7977,10 +7985,19 @@ describe('Machine Learning Utilities', () => {
       const k = 2
 
       const tests = [
-        { features: ['x'], point: { x: 1.5 } },
-        { features: ['x', 'y'], point: { x: 1.5, y: 1.5 } },
-        { features: ['x', 'y', 'z'], point: { x: 1.5, y: 1.5, z: 1.5 } },
-      ]
+        {
+          features: ['x'],
+          point: { x: 1.5 },
+        },
+        {
+          features: ['x', 'y'],
+          point: { x: 1.5, y: 1.5 },
+        },
+        {
+          features: ['x', 'y', 'z'],
+          point: { x: 1.5, y: 1.5, z: 1.5 },
+        },
+      ] as const
 
       tests.forEach((test) => {
         const neighbors = collection.knn(test.point, k, test.features)
@@ -7990,9 +8007,9 @@ describe('Machine Learning Utilities', () => {
         expect(results[0].id).toBeLessThan(3)
       })
 
-      // Test with nonexistent feature
-      // The KNN implementation will still work but ignore the nonexistent feature
-      const invalidResult = collection.knn({ x: 1.5 }, k, ['nonexistent', 'x'] as any)
+      // Test with nonexistent feature - using type assertion to test error handling
+      const invalidFeatures = ['nonexistent', 'x'] as unknown as readonly (keyof Point)[]
+      const invalidResult = collection.knn({ x: 1.5 }, k, invalidFeatures)
       expect(invalidResult.count()).toBe(k)
 
       // Verify that results are still based on valid features
@@ -8002,7 +8019,7 @@ describe('Machine Learning Utilities', () => {
 
     it('should handle edge cases', () => {
       const collection = collect(points)
-      const features = ['x', 'y', 'z']
+      const features = ['x', 'y', 'z'] as const satisfies readonly (keyof Point)[]
 
       const singleNeighbor = collection.knn({ x: 1, y: 1, z: 1 }, 1, features)
       expect(singleNeighbor.count()).toBe(1)

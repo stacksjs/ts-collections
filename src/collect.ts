@@ -3227,28 +3227,31 @@ ${collection.items.map(item =>
     },
 
     knn<K extends keyof T>(
-      point: Pick<T, K>,
+      point: { [P in K]?: T[P] },
       k: number,
-      features: K[],
+      features: ReadonlyArray<K> | K[],
     ): CollectionOperations<T> {
       // Calculate Euclidean distance
-      function distance(a: Pick<T, K>, b: Pick<T, K>): number {
+      function distance(a: T, b: { [P in K]?: T[P] }): number {
         return Math.sqrt(
           features.reduce((sum, feature) => {
-            const diff = Number(a[feature]) - Number(b[feature])
-            return sum + diff * diff
+            if (feature in b) {
+              const diff = Number(a[feature]) - Number(b[feature])
+              return sum + diff * diff
+            }
+            return sum
           }, 0),
         )
       }
 
       // Get k nearest neighbors
-      const neighbors = this.items
+      const neighbors = collection.items
         .map(item => ({
           item,
-          distance: distance(point, item as Pick<T, K>),
+          distance: distance(item, point),
         }))
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, k)
+        .slice(0, Math.min(k, collection.items.length))
         .map(n => n.item)
 
       return collect(neighbors)
