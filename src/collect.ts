@@ -1910,15 +1910,17 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       options: { chunks?: number, maxConcurrency?: number } = {},
     ): Promise<CollectionOperations<U>> {
       const { chunks = navigator.hardwareConcurrency || 4, maxConcurrency = chunks } = options
-      const chunkSize = Math.ceil(collection.length / chunks)
-      const batches = this.chunk(chunkSize)
+
+      // Calculate chunk size and create batches
+      const itemsPerChunk = Math.ceil(collection.length / chunks)
+      const batches = this.chunk(itemsPerChunk).toArray()
 
       // Create a semaphore for managing concurrency
       let runningTasks = 0
       const queue: Promise<any>[] = []
       const results: U[] = []
 
-      for (const batch of batches.items) {
+      for (const batch of batches) {
         // Wait if we've hit max concurrency
         // eslint-disable-next-line no-unmodified-loop-condition
         while (runningTasks >= maxConcurrency) {
@@ -1927,7 +1929,6 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
         runningTasks++
 
-        // Create a reference to store the promise
         let removeTask: (() => void) | undefined
 
         const task = (async () => {
@@ -1954,6 +1955,8 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
 
       // Wait for all tasks to complete
       await Promise.all(queue)
+
+      // Return results without flattening to maintain original types
       return collect(results)
     },
 
