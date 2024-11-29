@@ -5326,6 +5326,129 @@ describe('Text Analysis', () => {
   })
 })
 
+describe('Statistical Operations', () => {
+  describe('standardDeviation()', () => {
+    it('should calculate population and sample standard deviation of numeric array', () => {
+      // Using dataset with known standard deviation
+      const numbers = collect([2, 4, 4, 4, 5, 5, 7, 9])
+      const result = numbers.standardDeviation()
+
+      // Population std dev ≈ 2
+      expect(Math.round(result.population * 100) / 100).toBe(2)
+
+      // Sample std dev ≈ 2.14
+      expect(Math.round(result.sample * 100) / 100).toBe(2.14)
+    })
+
+    it('should calculate standard deviation using object key', () => {
+      const data = collect([
+        { value: 2 },
+        { value: 4 },
+        { value: 4 },
+        { value: 4 },
+        { value: 5 },
+        { value: 5 },
+        { value: 7 },
+        { value: 9 },
+      ])
+
+      const result = data.standardDeviation('value')
+
+      expect(Math.round(result.population * 100) / 100).toBe(2)
+      expect(Math.round(result.sample * 100) / 100).toBe(2.14)
+    })
+
+    it('should return 0 for single-item collection', () => {
+      const result = collect([42]).standardDeviation()
+
+      expect(result.population).toBe(0)
+      expect(result.sample).toBe(0)
+    })
+
+    it('should return 0 for empty collection', () => {
+      const result = collect([]).standardDeviation()
+
+      expect(result.population).toBe(0)
+      expect(result.sample).toBe(0)
+    })
+
+    it('should handle collection with identical values', () => {
+      const result = collect([5, 5, 5, 5]).standardDeviation()
+
+      expect(result.population).toBe(0)
+      expect(result.sample).toBe(0)
+    })
+
+    it('should handle decimal values', () => {
+      const data = collect([1.5, 2.5, 3.5, 4.5, 5.5])
+      const result = data.standardDeviation()
+
+      // Population std dev = √(sum((x - mean)²)/n)
+      // Mean = 3.5
+      // Sum of squared deviations = 20
+      // n = 5
+      // √(20/5) ≈ 1.41
+      expect(Math.round(result.population * 100) / 100).toBe(1.41)
+
+      // Sample std dev = √(sum((x - mean)²)/(n-1))
+      // √(20/4) ≈ 1.58
+      expect(Math.round(result.sample * 100) / 100).toBe(1.58)
+    })
+
+    it('should handle negative values', () => {
+      const data = collect([-2, -1, 0, 1, 2])
+      const result = data.standardDeviation()
+
+      // Population std dev = √(sum((x - mean)²)/n)
+      // Mean = 0
+      // Sum of squared deviations = 10
+      // n = 5
+      // √(10/5) ≈ 1.41
+      expect(Math.round(result.population * 100) / 100).toBe(1.41)
+
+      // Sample std dev = √(sum((x - mean)²)/(n-1))
+      // √(10/4) ≈ 1.58
+      expect(Math.round(result.sample * 100) / 100).toBe(1.58)
+    })
+
+    it('should handle object collection with missing values', () => {
+      interface TestData {
+        value?: number
+      }
+
+      const data = collect<TestData>([
+        { value: 1 },
+        { value: 2 },
+        { value: 4 },
+        { value: 5 },
+      ])
+
+      const result = data.standardDeviation('value')
+
+      // Population std dev with 4 values
+      expect(Math.round(result.population * 100) / 100).toBe(1.58)
+      // Sample std dev with 4 values
+      expect(Math.round(result.sample * 100) / 100).toBe(1.83)
+    })
+
+    it('should handle non-numeric string values', () => {
+      const data = collect([
+        { value: '1' },
+        { value: '2' },
+        { value: '3' },
+        { value: '4' },
+        { value: '5' },
+      ])
+
+      const result = data.standardDeviation('value')
+
+      // Should convert strings to numbers
+      expect(Math.round(result.population * 100) / 100).toBe(1.41)
+      expect(Math.round(result.sample * 100) / 100).toBe(1.58)
+    })
+  })
+})
+
 describe('Data Quality Operations', () => {
   describe('detectAnomalies()', () => {
     const dataset = [
