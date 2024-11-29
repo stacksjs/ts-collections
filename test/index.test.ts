@@ -6930,7 +6930,7 @@ describe('Parallel Processing', () => {
             return item * 2
           }),
         )
-        return results[0]
+        return collect(results).toArray() // Convert back to array to maintain types
       })
 
       const endTime = Date.now()
@@ -6939,8 +6939,8 @@ describe('Parallel Processing', () => {
       // All items should be processed
       expect(processed.count()).toBe(items.length)
 
-      // Results should be correct
-      expect(processed.toArray()).toEqual([2, 4, 6, 8, 10])
+      // Results should be correct - flatten the results to match expected format
+      expect(processed.flatten().toArray()).toEqual([2, 4, 6, 8, 10])
 
       // Total time should be less than sequential processing would take
       const sequentialTime = delays.reduce((a, b) => a + b, 0)
