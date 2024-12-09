@@ -35,9 +35,9 @@
     "prepublishOnly": "bun --bun run build",
     "release": "bun run changelog && bunx bumpp package.json --all",
     "test": "bun test",
-    "docs:dev": "bun --bun vitepress dev docs",
-    "docs:build": "bun --bun vitepress build docs",
-    "docs:preview": "bun --bun vitepress preview docs",
+    "dev:docs": "bun --bun vitepress dev docs",
+    "build:docs": "bun --bun vitepress build docs",
+    "preview:docs": "bun --bun vitepress preview docs",
     "typecheck": "bun --bun tsc --noEmit"
   },
   "devDependencies": {

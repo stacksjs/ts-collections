@@ -249,13 +249,13 @@ Please see our [releases](https://github.com/stackjs/ts-collect/releases) page f
 
 ## Contributing
 
-Please see [CONTRIBUTING](.github/CONTRIBUTING.md) for details.
+Please see [CONTRIBUTING](https://github.com/stackjs/contribute) for details.
 
 ## Community
 
 For help, discussion about best practices, or any other conversation that would benefit from being searchable:
 
-[Discussions on GitHub](https://github.com/stacksjs/ts-starter/discussions)
+[Discussions on GitHub](https://github.com/stacksjs/ts-collect/discussions)
 
 For casual chit-chat with others using this package:
 
@@ -276,6 +276,6 @@ We would like to extend our thanks to the following sponsors for funding Stacks 
 
 ## 📄 License
 
-The MIT License (MIT). Please see [LICENSE](LICENSE.md) for more information.
+The MIT License (MIT). Please see [LICENSE](https://github.com/stacksjs/ts-collect/blob/main/LICENSE.md) for more information.
 
 Made with 💙
