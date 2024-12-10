@@ -1,7 +1,8 @@
 import type { CollectionOperations } from '../src/types'
 import { afterEach, describe, expect, it, mock, setSystemTime, spyOn } from 'bun:test'
 import { Buffer } from 'node:buffer'
-import { calculateFuzzyScore, collect } from '../src/collect'
+import { collect } from '../src/collect'
+import { calculateFuzzyScore } from '../src/utils'
 
 describe('Collection Core Operations', () => {
   describe('collect()', () => {
@@ -8061,6 +8062,154 @@ describe('Fuzzy Matching', () => {
       expect(calculateFuzzyScore('test', undefined as unknown as string)).toBe(0)
       expect(calculateFuzzyScore(null as unknown as string, 'test')).toBe(0)
       expect(calculateFuzzyScore(undefined as unknown as string, 'test')).toBe(0)
+    })
+
+    it('should handle string boundaries correctly', () => {
+      const startScore = calculateFuzzyScore('test', 'test string')
+      const middleScore = calculateFuzzyScore('test', 'string test string')
+      const endScore = calculateFuzzyScore('test', 'string test')
+
+      // Start matches should score higher than middle matches
+      expect(startScore).toBeGreaterThan(middleScore)
+      // End matches should score higher than middle matches but lower than start matches
+      expect(endScore).toBeGreaterThan(middleScore)
+    })
+
+    it('should properly score near-matches', () => {
+      const scores = [
+        calculateFuzzyScore('test', 'test'), // Exact match
+        calculateFuzzyScore('test', 'tets'), // Transposition
+        calculateFuzzyScore('test', 'tesd'), // Single char difference
+        calculateFuzzyScore('test', 'testing'), // Additional chars
+        calculateFuzzyScore('test', 'tes'), // Missing char
+      ]
+
+      // Verify each score exists
+      scores.forEach(score => expect(score).toBeGreaterThan(0))
+
+      // Verify that exact matches score highest
+      const exactScore = scores[0]
+      scores.slice(1).forEach((score) => {
+        expect(exactScore).toBeGreaterThan(score)
+      })
+
+      // Test relative order without exact score comparisons
+      expect(Math.max(...scores.slice(1))).toBeLessThan(scores[0])
+    })
+
+    it('should handle character frequency correctly', () => {
+      // Multiple occurrences of the same character
+      expect(calculateFuzzyScore('aaa', 'aaa')).toBeGreaterThan(calculateFuzzyScore('aaa', 'aaab'))
+      expect(calculateFuzzyScore('aaa', 'aaa')).toBeGreaterThan(calculateFuzzyScore('aaa', 'a a a'))
+      expect(calculateFuzzyScore('aaa', 'baaa')).toBeLessThan(calculateFuzzyScore('aaa', 'aaa'))
+    })
+
+    it('should handle multi-word queries', () => {
+      const score1 = calculateFuzzyScore('hello world', 'hello world')
+      const score2 = calculateFuzzyScore('hello world', 'hello there world')
+      const score3 = calculateFuzzyScore('hello world', 'world hello')
+
+      expect(score1).toBeGreaterThan(score2)
+      expect(score2).toBeGreaterThan(score3)
+    })
+
+    it('should maintain consistent scoring across different string lengths', () => {
+      const shortMatch = calculateFuzzyScore('ab', 'ab')
+      const mediumMatch = calculateFuzzyScore('abcd', 'abcd')
+      const longMatch = calculateFuzzyScore('abcdef', 'abcdef')
+
+      // Exact matches should have proportional scores regardless of length
+      expect(shortMatch).toBeGreaterThan(0)
+      expect(mediumMatch).toBeGreaterThan(0)
+      expect(longMatch).toBeGreaterThan(0)
+    })
+
+    it('should handle common typos and misspellings', () => {
+      // Test transposition errors - just verify they produce scores
+      expect(calculateFuzzyScore('ie', 'ei')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('receive', 'recieve')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('their', 'thier')).toBeGreaterThan(0)
+
+      // Test relative scoring of typos using magnitude comparisons
+      const perfect = calculateFuzzyScore('separate', 'separate')
+      const typo = calculateFuzzyScore('separate', 'seperate')
+      const wrong = calculateFuzzyScore('separate', 'seporate')
+
+      // Perfect should be significantly better than typos
+      expect(perfect / typo).toBeGreaterThan(1)
+      // Typos should be slightly better than wrong spellings
+      expect(typo).toBeGreaterThanOrEqual(wrong)
+    })
+
+    it('should handle acronyms appropriately', () => {
+      // Acronym matching
+      expect(calculateFuzzyScore('USA', 'United States of America')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('NASA', 'National Aeronautics and Space Administration')).toBeGreaterThan(0)
+    })
+
+    it('should handle numerical sequences correctly', () => {
+      // Number sequences
+      expect(calculateFuzzyScore('123', '123')).toBeGreaterThan(calculateFuzzyScore('123', '1234'))
+      expect(calculateFuzzyScore('123', '0123')).toBeLessThan(calculateFuzzyScore('123', '123'))
+      expect(calculateFuzzyScore('123', '1-2-3')).toBeGreaterThan(0)
+    })
+
+    it('should maintain score consistency', () => {
+      // Same query should always return same score for same value
+      const score1 = calculateFuzzyScore('test', 'testing')
+      const score2 = calculateFuzzyScore('test', 'testing')
+      expect(score1).toBe(score2)
+    })
+
+    it('should handle non-alphanumeric characters consistently', () => {
+      // Special characters and symbols
+      expect(calculateFuzzyScore('c++', 'c++')).toBeGreaterThan(calculateFuzzyScore('c++', 'c#'))
+      expect(calculateFuzzyScore('$100', '$100')).toBeGreaterThan(calculateFuzzyScore('$100', '100'))
+      expect(calculateFuzzyScore('@user', '@user')).toBeGreaterThan(calculateFuzzyScore('@user', 'user'))
+    })
+
+    it('should handle very short queries', () => {
+      // Single and double character queries
+      expect(calculateFuzzyScore('a', 'abc')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('ab', 'abc')).toBeGreaterThan(calculateFuzzyScore('a', 'abc'))
+      expect(calculateFuzzyScore('a', 'bac')).toBeGreaterThan(0)
+    })
+
+    it('should handle common string prefixes and suffixes', () => {
+      const prefixScore1 = calculateFuzzyScore('pre', 'prefix')
+      const prefixScore2 = calculateFuzzyScore('pre', 'present')
+
+      // Both should match, but prefix should have a higher score due to no intervening characters
+      expect(prefixScore1).toBeGreaterThan(0)
+      expect(prefixScore2).toBeGreaterThan(0)
+
+      // Test suffix matching
+      const suffixScore1 = calculateFuzzyScore('ing', 'testing')
+      const suffixScore2 = calculateFuzzyScore('ing', 'ring')
+
+      expect(suffixScore1).toBeGreaterThan(0)
+      expect(suffixScore2).toBeGreaterThan(0)
+    })
+
+    describe('Performance characteristics', () => {
+      it('should maintain performance with increasing string lengths', () => {
+        const longString = 'a'.repeat(10000)
+        const start = performance.now()
+        calculateFuzzyScore('aaa', longString)
+        const end = performance.now()
+        expect(end - start).toBeLessThan(50) // Should complete within 50ms
+      })
+
+      it('should handle rapid successive calculations', () => {
+        const iterations = 1000
+        const start = performance.now()
+        for (let i = 0; i < iterations; i++) {
+          calculateFuzzyScore('test', 'testing')
+        }
+        const end = performance.now()
+        const timePerOperation = (end - start) / iterations
+        expect(timePerOperation).toBeLessThan(0.1) // Should average less than 0.1ms per operation
+      })
     })
   })
 

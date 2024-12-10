@@ -103,7 +103,6 @@ export function validateCoordinates(lat: number, lon: number): boolean {
 
 // Helper function for fuzzy search scoring
 export function calculateFuzzyScore(query: string, value: string): number {
-  // Handle null/undefined values
   if (!query || !value)
     return 0
 
@@ -111,23 +110,81 @@ export function calculateFuzzyScore(query: string, value: string): number {
   let lastIndex = -1
   const lowerQuery = query.toLowerCase()
   const lowerValue = value.toLowerCase()
+  const valueLength = lowerValue.length
 
-  for (const char of lowerQuery) {
-    const index = lowerValue.indexOf(char, lastIndex + 1)
-    if (index === -1)
-      return 0
-    // Adjust score calculation to give higher weight to exact matches
-    // and sequential characters
-    const distance = index - lastIndex
-    score += 1 / (distance > 1 ? distance * 2 : distance)
-    lastIndex = index
+  // Look ahead for transpositions
+  const isTransposed = (char: string, nextChar: string, startIndex: number): number => {
+    const normalIndex = lowerValue.indexOf(char, startIndex)
+    const transposedIndex = lowerValue.indexOf(nextChar, startIndex)
+
+    if (normalIndex > -1 && transposedIndex > -1) {
+      // Check if characters are transposed
+      if (Math.abs(normalIndex - transposedIndex) === 1) {
+        return transposedIndex > normalIndex ? normalIndex : transposedIndex
+      }
+    }
+    return -1
   }
 
-  // Boost score for exact matches and proportional length matches
-  if (lowerQuery === lowerValue)
-    score *= 2
-  else if (query.length === value.length)
-    score *= 1.5
+  let i = 0
+  while (i < lowerQuery.length) {
+    const char = lowerQuery[i]
+    const nextChar = lowerQuery[i + 1]
+    let index = lowerValue.indexOf(char, lastIndex + 1)
+
+    // Check for transpositions if we have a next character
+    if (index === -1 && nextChar) {
+      const transposedIndex = isTransposed(char, nextChar, lastIndex + 1)
+      if (transposedIndex > -1) {
+        // Found a transposition, handle both characters
+        score += 1 / (transposedIndex - lastIndex || 1)
+        lastIndex = transposedIndex + 1
+        i += 2 // Skip next character since we handled it
+        continue
+      }
+    }
+
+    // If still not found, try finding the character anywhere after last match
+    if (index === -1) {
+      index = lowerValue.indexOf(char, lastIndex + 1)
+      if (index === -1) {
+        // Try one last time from the beginning in case of wrapped matches
+        index = lowerValue.indexOf(char)
+        if (index > -1 && index > lastIndex) {
+          score += 0.5 / (index - lastIndex) // Penalized score for out-of-order match
+          lastIndex = index
+          i++
+          continue
+        }
+        // Character not found at all
+        i++
+        continue
+      }
+    }
+
+    // Calculate position-based bonus
+    const positionBonus = index === 0
+      ? 1.2
+      : index === valueLength - 1 ? 1.1 : 1.0
+
+    // Calculate distance-based score
+    const distance = index - lastIndex
+    score += (1 / (distance > 1 ? distance * 1.5 : distance)) * positionBonus
+
+    lastIndex = index
+    i++
+  }
+
+  // Apply bonuses
+  if (lowerQuery === lowerValue) {
+    score *= 2 // Exact match bonus
+  }
+  else if (query.length === value.length) {
+    score *= 1.5 // Same length bonus
+  }
+  else if (lowerValue.startsWith(lowerQuery)) {
+    score *= 1.3 // Prefix match bonus
+  }
 
   return score
 }
