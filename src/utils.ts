@@ -100,3 +100,34 @@ export function validateCoordinates(lat: number, lon: number): boolean {
 //     return String(item.id)
 //   return JSON.stringify(item)
 // }
+
+// Helper function for fuzzy search scoring
+export function calculateFuzzyScore(query: string, value: string): number {
+  // Handle null/undefined values
+  if (!query || !value)
+    return 0
+
+  let score = 0
+  let lastIndex = -1
+  const lowerQuery = query.toLowerCase()
+  const lowerValue = value.toLowerCase()
+
+  for (const char of lowerQuery) {
+    const index = lowerValue.indexOf(char, lastIndex + 1)
+    if (index === -1)
+      return 0
+    // Adjust score calculation to give higher weight to exact matches
+    // and sequential characters
+    const distance = index - lastIndex
+    score += 1 / (distance > 1 ? distance * 2 : distance)
+    lastIndex = index
+  }
+
+  // Boost score for exact matches and proportional length matches
+  if (lowerQuery === lowerValue)
+    score *= 2
+  else if (query.length === value.length)
+    score *= 1.5
+
+  return score
+}

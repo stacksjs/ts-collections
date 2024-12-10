@@ -1,7 +1,7 @@
 import type { CollectionOperations } from '../src/types'
 import { afterEach, describe, expect, it, mock, setSystemTime, spyOn } from 'bun:test'
 import { Buffer } from 'node:buffer'
-import { collect } from '../src/collect'
+import { calculateFuzzyScore, collect } from '../src/collect'
 
 describe('Collection Core Operations', () => {
   describe('collect()', () => {
@@ -7966,6 +7966,101 @@ describe('Fuzzy Matching', () => {
       const matches = collection.fuzzyMatch('text', longString, 0.9)
       expect(matches.count()).toBeGreaterThan(0)
       expect(matches.toArray().some(item => item.text.startsWith(longString))).toBe(true)
+    })
+  })
+
+  describe('calculateFuzzyScore', () => {
+    it('should return perfect score for exact matches', () => {
+      expect(calculateFuzzyScore('test', 'test')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('a', 'a')).toBeGreaterThan(0)
+    })
+
+    it('should handle case-insensitive matching', () => {
+      const lowercaseScore = calculateFuzzyScore('test', 'test')
+      const uppercaseScore = calculateFuzzyScore('TEST', 'test')
+      const mixedScore = calculateFuzzyScore('TeSt', 'test')
+
+      expect(lowercaseScore).toBeCloseTo(lowercaseScore) // Compare to itself first
+      expect(uppercaseScore).toBeCloseTo(lowercaseScore, 1) // Use 1 decimal precision
+      expect(mixedScore).toBeCloseTo(lowercaseScore, 1) // Use 1 decimal precision
+    })
+
+    it('should return 0 for non-matching strings', () => {
+      expect(calculateFuzzyScore('xyz', 'test')).toBe(0)
+      expect(calculateFuzzyScore('test', '')).toBe(0)
+      expect(calculateFuzzyScore('', 'test')).toBe(0)
+    })
+
+    it('should handle partial matches', () => {
+      const exactScore = calculateFuzzyScore('test', 'test')
+      const partialScore = calculateFuzzyScore('tst', 'test')
+
+      expect(partialScore).toBeGreaterThan(0)
+      expect(partialScore).toBeLessThan(exactScore)
+    })
+
+    it('should handle sequential vs non-sequential matches', () => {
+      const sequentialScore = calculateFuzzyScore('te', 'test')
+      const nonSequentialScore = calculateFuzzyScore('tt', 'test')
+
+      expect(sequentialScore).toBeGreaterThan(nonSequentialScore)
+    })
+
+    it('should handle special characters', () => {
+      expect(calculateFuzzyScore('t-t', 'test-test')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('t.t', 'test.test')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('t&t', 'test&test')).toBeGreaterThan(0)
+    })
+
+    it('should handle numbers in strings', () => {
+      expect(calculateFuzzyScore('t1', 'test1')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('12', 'test12')).toBeGreaterThan(0)
+    })
+
+    it('should handle whitespace', () => {
+      expect(calculateFuzzyScore('t t', 'test test')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('  t', '  test')).toBeGreaterThan(0)
+    })
+
+    it('should handle empty strings appropriately', () => {
+      expect(calculateFuzzyScore('', '')).toBe(0)
+      expect(calculateFuzzyScore('test', '')).toBe(0)
+      expect(calculateFuzzyScore('', 'test')).toBe(0)
+    })
+
+    it('should handle very long strings', () => {
+      const longString = 'a'.repeat(1000)
+      expect(calculateFuzzyScore('aaa', longString)).toBeGreaterThan(0)
+    })
+
+    it('should produce higher scores for better matches', () => {
+      const exactScore = calculateFuzzyScore('test', 'test')
+      const partialScore = calculateFuzzyScore('test', 'testing')
+      const looseScore = calculateFuzzyScore('test', 'totally extreme sample text')
+
+      // Exact match should have highest score due to the score boost
+      expect(exactScore).toBeGreaterThan(partialScore)
+      // Partial matches should score higher than scattered matches
+      expect(partialScore).toBeGreaterThan(looseScore)
+    })
+
+    it('should handle repeated characters', () => {
+      expect(calculateFuzzyScore('tt', 'test test')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('ttt', 'test test test')).toBeGreaterThan(0)
+    })
+
+    it('should handle unicode characters', () => {
+      expect(calculateFuzzyScore('café', 'café')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('über', 'über')).toBeGreaterThan(0)
+      expect(calculateFuzzyScore('piñata', 'piñata')).toBeGreaterThan(0)
+    })
+
+    it('should handle edge cases', () => {
+      // Properly handle null/undefined without throwing errors
+      expect(calculateFuzzyScore('test', null as unknown as string)).toBe(0)
+      expect(calculateFuzzyScore('test', undefined as unknown as string)).toBe(0)
+      expect(calculateFuzzyScore(null as unknown as string, 'test')).toBe(0)
+      expect(calculateFuzzyScore(undefined as unknown as string, 'test')).toBe(0)
     })
   })
 

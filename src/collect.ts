@@ -1,7 +1,7 @@
 import type { AnomalyDetectionOptions, AsyncCallback, CacheEntry, ClusterResult, Collection, CollectionMetrics, CollectionOperations, CompareFunction, ConditionalCallback, KeySelector, KMeansOptions, KMeansResult, LazyCollectionOperations, MovingAverageOptions, PaginationResult, PluckedCluster, PluckedData, RecordMerge, RegressionResult, SerializationOptions, StandardDeviationResult, TimeSeriesOptions, TimeSeriesPoint, ValidationResult, ValidationRule, ValidationSchema } from './types'
 import process from 'node:process'
 import { createLazyOperations } from './lazy'
-import { getNextTimestamp, isSameDay, validateCoordinates } from './utils'
+import { calculateFuzzyScore, getNextTimestamp, isSameDay, validateCoordinates } from './utils'
 
 /**
  * Creates a new collection with optimized performance
@@ -32,20 +32,6 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
   //   snapshots: new Map(),
   //   changes: [],
   // }
-
-  // Helper function for fuzzy search scoring
-  function calculateFuzzyScore(query: string, value: string): number {
-    let score = 0
-    let lastIndex = -1
-    for (const char of query) {
-      const index = value.indexOf(char, lastIndex + 1)
-      if (index === -1)
-        return 0
-      score += 1 / (index - lastIndex)
-      lastIndex = index
-    }
-    return score
-  }
 
   return {
     ...collection,
