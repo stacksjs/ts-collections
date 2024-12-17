@@ -43,7 +43,7 @@
   "devDependencies": {
     "@stacksjs/eslint-config": "^3.8.1-beta.2",
     "@types/bun": "^1.1.14",
-    "bumpp": "^9.9.0",
+    "bumpp": "^9.9.1",
     "bun-plugin-dtsx": "^0.21.9",
     "changelogen": "^0.5.7",
     "lint-staged": "^15.2.11",
