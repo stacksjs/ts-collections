@@ -5,9 +5,10 @@ hero:
   name: "ts-collect"
   text: "A TypeScript Collection Library"
   tagline: "Powerful, yet lightweight, Laravel-like Collections written for TypeScript"
+  image: /images/logo-white.png
   actions:
     - theme: brand
-      text: Documentation
+      text: Get Started
       link: /intro
     - theme: alt
       text: View on GitHub
@@ -27,3 +28,5 @@ features:
     icon: 🏗️
     details: "Written in and for TypeScript, with full type support."
 ---
+
+<Home />

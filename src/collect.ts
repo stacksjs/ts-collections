@@ -195,7 +195,7 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       const flat = (arr: any[], d: number): any[] => {
         return d > 0
           ? arr.reduce((acc, val) =>
-            acc.concat(Array.isArray(val) ? flat(val, d - 1) : val), [])
+              acc.concat(Array.isArray(val) ? flat(val, d - 1) : val), [])
           : arr.slice()
       }
       return collect(flat(collection.items, depth))
@@ -333,9 +333,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
           else if (sourceValue && typeof sourceValue === 'object') {
             result[key] = key in result
               ? mergeRecursiveHelper(
-                result[key] as object,
-                sourceValue as object,
-              )
+                  result[key] as object,
+                  sourceValue as object,
+                )
               : { ...sourceValue }
           }
           else {
@@ -349,9 +349,9 @@ function createCollectionOperations<T>(collection: Collection<T>): CollectionOpe
       const merged = collection.items.map((item, index) => {
         return index < otherItems.length
           ? mergeRecursiveHelper(
-            item as object,
-            otherItems[index] as object,
-          )
+              item as object,
+              otherItems[index] as object,
+            )
           : { ...item }
       })
       return collect(merged) as CollectionOperations<RecordMerge<T, U>>
