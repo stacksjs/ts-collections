@@ -7,26 +7,12 @@ import viteConfig from './vite.config'
 
 // https://vitepress.dev/reference/site-config
 
-const analytics = {
-  driver: 'fathom',
-
-  drivers: {
-    googleAnalytics: {
-      trackingId: 'UA-XXXXXXXXX-X',
-    },
-
-    fathom: {
-      siteId: 'WOLZMJDL',
-    },
-  },
-}
-
-const fathomAnalyticsHead: HeadConfig[] = [
+const analyticsHead: HeadConfig[] = [
   [
     'script',
     {
       'src': 'https://cdn.usefathom.com/script.js',
-      'data-site': analytics.drivers?.fathom?.siteId || '',
+      'data-site': 'EGVEPJYT',
       'defer': '',
     },
   ],
@@ -88,13 +74,6 @@ const sidebar = [
     ],
   },
 ]
-
-const analyticsHead
-  = analytics.driver === 'fathom'
-    ? fathomAnalyticsHead
-    : analytics.driver === 'google-analytics'
-      ? googleAnalyticsHead
-      : []
 
 export default withPwa(
   defineConfig({
