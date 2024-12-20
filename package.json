@@ -58,6 +58,9 @@
     "vite-plugin-pwa": "^0.21.1",
     "vitepress": "^1.5.0"
   },
+  "overrides": {
+    "unconfig": "0.3.10"
+  },
   "simple-git-hooks": {
     "pre-commit": "bun lint-staged"
   },

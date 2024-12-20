@@ -18,24 +18,6 @@ const analyticsHead: HeadConfig[] = [
   ],
 ]
 
-const googleAnalyticsHead: HeadConfig[] = [
-  [
-    'script',
-    {
-      async: '',
-      src: `https://www.googletagmanager.com/gtag/js?id=${analytics.drivers?.googleAnalytics?.trackingId}`,
-    },
-  ],
-  [
-    'script',
-    {},
-    `window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'TAG_ID');`,
-  ],
-]
-
 const nav = [
   {
     text: 'Changelog',
@@ -71,6 +53,7 @@ const sidebar = [
     items: [
       { text: 'Introduction', link: '/intro' },
       { text: 'Install', link: '/install' },
+      { text: 'Usage', link: '/usage' },
     ],
   },
 ]
@@ -79,7 +62,7 @@ export default withPwa(
   defineConfig({
     lang: 'en-US',
     title: 'ts-collect',
-    description: 'A simple, fast, and secure TLS certificate manager for your projects.',
+    description: 'Powerful, yet lightweight, Laravel-like Collections written for TypeScript.',
     metaChunk: true,
 
     head: [
@@ -88,7 +71,7 @@ export default withPwa(
       ['meta', { name: 'theme-color', content: '#0A0ABC' }],
       ['meta', { property: 'og:type', content: 'website' }],
       ['meta', { property: 'og:locale', content: 'en' }],
-      ['meta', { property: 'og:title', content: 'ts-collect | A better developer environment.' }],
+      ['meta', { property: 'og:title', content: 'ts-collect | l, yet lightweight, Laravel-like Collections written for TypeScript.' }],
       ['meta', { property: 'og:site_name', content: 'ts-collect' }],
       ['meta', { property: 'og:image', content: './images/og-image.jpg' }],
       ['meta', { property: 'og:url', content: 'https://ts-collect.netlify.app/' }],
