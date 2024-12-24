@@ -18,6 +18,7 @@ dtsx
 entrypoints
 Flippable
 heroicons
+iconify
 kmeans
 Laravel
 lockb
@@ -29,14 +30,17 @@ Postcardware
 prefetch
 preinstall
 quickfix
+shikijs
 socio
 Solana
 Spatie
 stacksjs
 stringifying
 typecheck
+unconfig
 undefineds
 undot
+unocss
 unplugin
 unref
 upath
